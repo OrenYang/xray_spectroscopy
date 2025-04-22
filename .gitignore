@@ -1,0 +1,24 @@
+# Ignore image files
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+*.bmp
+*.gif
+
+# Ignore analysis outputs
+*.csv
+*.npy
+*.npz
+*.h5
+*.pdf
+*.txt
+
+*.DS_store
+
+# Ignore any outputs in specific folders
+outputs/
+results/
+data/
+

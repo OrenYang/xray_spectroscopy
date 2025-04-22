@@ -21,4 +21,6 @@
 outputs/
 results/
 data/
-
+lineouts/
+lineout_plots/
+imagePlate_cropped/

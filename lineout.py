@@ -11,7 +11,6 @@ def main():
     #Loop through a directory with cropped images to create the lineouts
     for f in os.listdir(im_dir):
         img = os.path.join(im_dir,f)
-        print(img)
         lineout(img)
 
     return
@@ -19,10 +18,10 @@ def main():
 
 #Function to plot and save lineouts
 ######## CROP AND ROTATE IMAGE TO DESIRED ORIENTATION MANUALLY ########
-#Input: img - a single image file of any type
-def lineout(img, plot_dir = 'lineout_plots', lineout_dir = 'lineouts'):
+#Input: img - a single image file of any type, file name must start with 4 digit shot number
+def lineout(img , plot_dir = 'lineout_plots', lineout_dir = 'lineouts'):
 
-    name = img.split('/')[1]
+    name = img.split('/')[-1]
 
     #make output folders
     os.makedirs(plot_dir, exist_ok=True)
@@ -44,7 +43,6 @@ def lineout(img, plot_dir = 'lineout_plots', lineout_dir = 'lineouts'):
     x = np.linspace(0,1,len(profile))
 
     #Ensure all lineouts are oriented in the same direction
-    print(np.mean(profile),max(profile))
     if np.mean(profile) > max(profile)/1.5:
         profile = -1*profile.astype(np.float64)
 

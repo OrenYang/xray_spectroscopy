@@ -1,0 +1,784 @@
+
+                     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                     +                                                                 +
+                     +                                                                 +
+                     +                                                                 +
+                     +                        PrismSPECT                               +
+                     +                                                                 +
+                     +                     (ver. 7.1.0)                                +
+                     +                                                                 +
+                     +                                                                 +
+                     +  Copyright (c) Prism Computational Sciences, Inc., 2004-2008.   +
+                     +                                                                 +
+                     +                                                                 +
+                     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+                     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                     +                                                                 +
+                     +    Date and Time of Calculation:    04/25/25   14:38:13.9       +
+                     +                                                                 +
+                     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+ Opacity calculation uses Qt parallel.
+ Rad. rate calculation uses Qt parallel.
+  
+Atomic model file for igas #  1 = /mnt/0EBE58A4BE58865D/Program Files (x86)/Prism/DataTables/ATBASE_6.2/Z54_Xe/atm/Z54_Xe_emis_kshell_spectra.atm                                                                                                                                                                                                                 
+ #
+ Radiative Grid:
+ Total number of photon energies:         2155
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2143
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2126
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          565
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2083
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          564
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2048
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          558
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1932
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          540
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1864
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 1.000E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          525
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2149
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2144
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2126
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          565
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2087
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2052
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          562
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1946
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          544
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1885
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 1.500E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          528
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2148
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2142
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2126
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          565
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2096
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          568
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2063
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          556
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1964
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          550
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1909
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 2.000E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          533
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2148
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          569
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2140
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          568
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2122
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2102
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2064
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          557
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1971
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          549
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1913
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 2.500E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          532
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2148
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          570
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2141
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2125
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2105
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          565
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2067
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          558
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1983
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          545
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1919
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 3.000E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          530
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2148
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          570
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2141
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2129
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          568
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2102
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          564
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2067
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          557
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1995
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          546
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1926
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 3.500E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          533
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2147
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          571
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2139
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2126
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2101
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          564
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2073
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          558
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1996
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          554
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1930
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 4.000E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          539
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2147
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.616E+02 te= 4.500E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          568
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2137
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.619E+02 te= 4.500E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2129
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.620E+02 te= 4.500E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2105
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.620E+02 te= 4.500E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2075
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 4.500E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          557
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2005
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 4.500E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          553
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1935
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 4.500E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          540
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2146
+ Number of transitions used:               584
+ #
+Population time step 4.586E-11 is done, maximum delta pop is 1.579E+02 te= 5.000E+02 ne= 5.196E+19  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          567
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2137
+ Number of transitions used:               584
+ #
+Population time step 9.173E-12 is done, maximum delta pop is 1.611E+02 te= 5.000E+02 ne= 2.598E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2130
+ Number of transitions used:               584
+ #
+Population time step 4.586E-12 is done, maximum delta pop is 1.616E+02 te= 5.000E+02 ne= 5.196E+20  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2104
+ Number of transitions used:               584
+ #
+Population time step 9.173E-13 is done, maximum delta pop is 1.619E+02 te= 5.000E+02 ne= 2.598E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          566
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2079
+ Number of transitions used:               584
+ #
+Population time step 4.586E-13 is done, maximum delta pop is 1.620E+02 te= 5.000E+02 ne= 5.196E+21  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          557
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         2013
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 5.000E+02 ne= 2.598E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          553
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1
+ #
+ Radiative Grid:
+ Total number of photon energies:         1937
+ Number of transitions used:               584
+ #
+Population time step 1.000E-13 is done, maximum delta pop is 1.620E+02 te= 5.000E+02 ne= 5.196E+22  zone=      1 level=      1 popul= 6.135E-03
+ #
+ Spectral Grid:
+ Total number of photon energies:          540
+ Number of transitions used:               125
+ #
+ Now calculating data for LOS index:             1

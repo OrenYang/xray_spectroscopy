@@ -144,23 +144,27 @@ class Spectrum:
         plt.show()
 
     def compare_plots(self, comp, axis='energy'):
-        if not isinstance(comp, self.__class__):
-            raise TypeError(f"Expected an instance of {self.__class__.__name__}, got {type(comp).__name__} instead.")
+        if not isinstance(comp, list):
+            comp = [comp]
+        for c in comp:
+            if not isinstance(c, self.__class__):
+                raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
 
         x, label = self._get_axis_data(axis)
-        x_comp, _ = comp._get_axis_data(axis)
-
         norm_self = (self.intensity - np.min(self.intensity)) / np.ptp(self.intensity)
-        norm_comp = (comp.intensity - np.min(comp.intensity)) / np.ptp(comp.intensity)
-
         plt.plot(x, norm_self, label=self.label)
-        plt.plot(x_comp, norm_comp, label=comp.label)
+
+        for c in comp:
+            x_c, _ = c._get_axis_data(axis)
+            norm_c = (c.intensity - np.min(c.intensity)) / np.ptp(c.intensity)
+            plt.plot(x_c, norm_c, '--', label=c.label)
+            
         plt.xlabel(label)
         plt.ylabel('Intensity (arb. units)')
         plt.legend()
         plt.show()
 
-def upload_folder(type = 'experimental'):
+def upload_folder():
     root = Tk()
     root.withdraw()
     root.update()
@@ -169,16 +173,12 @@ def upload_folder(type = 'experimental'):
 
     objs = []
 
-    if type == 'experimental':
-        for spec in os.listdir(dir):
-            spec = os.path.join(dir,spec)
+    for spec in os.listdir(dir):
+        spec = os.path.join(dir,spec)
+        if spec.endswith('.ppd') or spec.endswith('.csv'):
             objs.append(Spectrum(spec))
-    elif type == 'sim':
-        for spec in os.listdir(dir):
-            spec = os.path.join(dir,spec)
-            if spec.endswith('.ppd'):
-                objs.append(Spectrum(spec))
-            else:
-                continue
+        else:
+            continue
+
 
     return objs

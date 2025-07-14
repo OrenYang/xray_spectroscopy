@@ -73,6 +73,10 @@ class Spectrum:
         time.sleep(0.5)
         plt.close()
 
+        if len(clicked) < 2:
+            print("Fewer than 2 points selected. Calibration aborted.")
+            return
+
         # Get nearest peak x values to clicked points
         click_xs = [c[0] for c in clicked]
         peak1 = min(self.x, key=lambda x: abs(x - click_xs[0]))
@@ -161,33 +165,25 @@ class Spectrum:
 
         return x, label
 
-    def plot(self, axis='energy'):
-        x, label = self._get_axis_data(axis)
-
-        plt.plot(x, self.intensity)
-        plt.xlabel(label)
-        plt.ylabel('Intensity (arb. units)')
-        plt.show()
-
-    def compare_plots(self, comp, axis='energy'):
-        if not isinstance(comp, list):
-            comp = [comp]
-        for c in comp:
-            if not isinstance(c, self.__class__):
-                raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
-
+    def plot(self, comp=None, axis='energy'):
         x, label = self._get_axis_data(axis)
         norm_self = (self.intensity - np.min(self.intensity)) / np.ptp(self.intensity)
         plt.plot(x, norm_self, label=self.label)
 
-        for c in comp:
-            x_c, _ = c._get_axis_data(axis)
-            norm_c = (c.intensity - np.min(c.intensity)) / np.ptp(c.intensity)
-            plt.plot(x_c, norm_c, '--', label=c.label)
+        if comp is not None:
+            if not isinstance(comp, list):
+                comp = [comp]
+            for c in comp:
+                if not isinstance(c, self.__class__):
+                    raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
+                x_c, _ = c._get_axis_data(axis)
+                norm_c = (c.intensity - np.min(c.intensity)) / np.ptp(c.intensity)
+                plt.plot(x_c, norm_c, '--', label=c.label)
 
         plt.xlabel(label)
-        plt.ylabel('Intensity (arb. units)')
+        plt.ylabel('Normalized Intensity')
         plt.legend()
+        plt.title('Spectra Comparison' if comp else self.label)
         plt.show()
 
     def fit(self, comp, axis='energy'):

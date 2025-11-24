@@ -241,6 +241,9 @@ class Spectrum:
 
         return best_match
 
+        def reflectivity_calibration():
+            return
+
 def upload_folder():
     root = Tk()
     root.withdraw()

@@ -2,8 +2,8 @@ import os
 import pandas as pd
 
 # === Settings ===
-input_folder = "scaled_lineouts"       # Folder with your original CSVs
-output_folder = "scaled_lineouts_cropped"    # Folder to save updated CSVs
+input_folder = "calibrated_lineouts"       # Folder with your original CSVs
+output_folder = "calibrated_lineouts_cropped"    # Folder to save updated CSVs
 os.makedirs(output_folder, exist_ok=True)
 
 # Define your energy range

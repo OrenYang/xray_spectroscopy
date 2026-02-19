@@ -1,3 +1,106 @@
+"""
+================================================================================
+spectrum.py  –  X-ray Spectral Analysis Toolkit
+================================================================================
+
+OVERVIEW
+--------
+This module provides the `Spectrum` class for loading, calibrating, and fitting
+experimental x-ray spectra against libraries of simulated spectra, as well as
+helper functions for loading calibration data.
+
+CLASSES
+-------
+Spectrum
+    Core class representing a single spectrum (experimental or simulated).
+
+    Loading
+    -------
+    Spectrum()                  Opens a file dialog to select a spectrum file.
+    Spectrum("path/to/file")    Loads directly from a .csv or .ppd file.
+
+    Supported input formats:
+      - Calibrated CSV   : columns 'energy', 'wavelength', 'intensity'
+      - Raw simulation   : whitespace-delimited .ppd or similar, with a 15-line
+                           header containing 'Plasma temperature' and 'Mass density'
+      - Raw lineout      : headerless CSV with a single intensity column
+
+    Calibration & Processing
+    ------------------------
+    .rescale()                  Interactive wavelength/energy calibration via
+                                ginput peak clicking and spline fitting.
+    .reflectivity_calibration() Corrects for crystal reflectivity curve.
+    .filter_transmission()      Corrects for filter transmission.
+    .subtract_continuum()       Interactively fits and subtracts a bremsstrahlung
+                                continuum (exponential fit); also estimates electron
+                                temperature from the continuum slope.
+
+    Fitting
+    -------
+    .fit(comp, axis, noise_sigma)
+        Fits this spectrum against a list of simulated Spectrum objects by
+        minimizing MSE. Converts MSE to chi-squared and reports confidence
+        regions using the Delta chi2 method (2 free parameters: T and rho):
+
+            68% confidence region:  Delta chi2 < 2.30
+            95% confidence region:  Delta chi2 < 6.17
+
+        If noise_sigma is not provided, it is estimated from the best-fit
+        residuals. For the most rigorous error bars, supply noise_sigma
+        estimated from a signal-free region of your detector.
+
+        Also produces a 2D Delta chi2 heatmap with confidence contours if
+        simulation labels are formatted as 'T=<value>_R=<value>'.
+
+    Plotting & Saving
+    -----------------
+    .plot()                     Plots the spectrum; overlays best-fit curve if
+                                a fit has been run.
+    .save()                     Saves spectrum and best-fit info to CSV.
+
+FUNCTIONS
+---------
+upload_folder()                 Loads all .ppd/.csv files from a selected folder
+                                as a list of Spectrum objects. Useful for loading
+                                a simulation library in one call.
+load_reflectivity_calibration() Loads a crystal reflectivity CSV and returns an
+                                interpolation function.
+load_filter_transmission()      Loads a filter transmission .txt file and returns
+                                an interpolation function.
+
+TYPICAL WORKFLOW
+----------------
+    # 1. Load and calibrate experimental spectrum
+    exp = Spectrum()
+    exp.rescale()
+    exp.reflectivity_calibration(load_reflectivity_calibration())
+    exp.subtract_continuum()
+
+    # 2. Load simulation library
+    sims = upload_folder()
+
+    # 3. Fit and get confidence regions
+    exp.fit(sims, axis='energy')
+
+    # 4. Save result
+    exp.save()
+
+DEPENDENCIES
+------------
+    numpy, matplotlib, pandas, scipy
+
+NOTES
+-----
+- All intensity arrays are normalized to their absolute maximum before fitting.
+- Simulation labels must follow the 'T=<val>_R=<val>' format (auto-set when
+  loading .ppd files) for the 2D confidence landscape plot to work.
+- The Delta chi2 thresholds assume Gaussian noise and that the grid is dense
+  enough to sample the chi2 surface well. If your grid is coarse, the true
+  minimum may lie between grid points; consider fitting a 2D paraboloid near
+  the minimum for sub-grid-spacing precision.
+================================================================================
+"""
+
 import numpy as np
 import matplotlib
 matplotlib.use("TkAgg")
@@ -8,6 +111,9 @@ import os
 from tkinter import filedialog, Tk
 from scipy.interpolate import interp1d, PchipInterpolator
 from scipy.optimize import curve_fit
+from matplotlib.colors import LogNorm
+import re
+from matplotlib.lines import Line2D
 
 
 class Spectrum:
@@ -189,35 +295,71 @@ class Spectrum:
 
         return x, label
 
-    def plot(self, comp=None, axis='energy',show_best_fit=True):
-        x, label = self._get_axis_data(axis)
+    def plot(self, comp=None, axis='energy', show_best_fit=True, title=None, xlabel=None, ylabel=None, legend_names=None, atomic_mass=None):
+        x, default_xlabel = self._get_axis_data(axis)
         norm_self = self.intensity / np.max(np.abs(self.intensity))
-        plt.plot(x, norm_self, label=self.label)
+        atomic_mass = atomic_mass or getattr(self, 'atomic_mass', None)
 
+        # Build format dict from best fit label
+        fmt = {}
+        if self.best_fit_label is not None:
+            t_match = re.search(r'T=([\d.eE+\-]+)', self.best_fit_label)
+            r_match = re.search(r'R=([\d.eE+\-]+)', self.best_fit_label)
+            if t_match:
+                fmt['T'] = f'{float(t_match.group(1)):.4g}'
+            if r_match:
+                R_val = float(r_match.group(1))
+                fmt['rho'] = f'{R_val:.4g}'
+                if atomic_mass is not None:
+                    fmt['ni'] = f'{mass_density_to_ion_density(R_val, atomic_mass):.3e}'
+
+        def apply_fmt(s):
+            try:
+                return s.format(**fmt)
+            except KeyError:
+                return s
+
+        # Build legend name list
+        all_labels = [self.label]
         if comp is not None:
             if not isinstance(comp, list):
                 comp = [comp]
+            all_labels += [c.label for c in comp]
+        if show_best_fit and self.best_fit_curve is not None:
+            all_labels += [f"Best Fit: {self.best_fit_label}"]
+
+        name_iter = iter([apply_fmt(n) for n in legend_names]) if legend_names is not None else iter(all_labels)
+
+        def next_name(fallback):
+            try:
+                return next(name_iter)
+            except StopIteration:
+                return fallback
+
+        plt.plot(x, norm_self, label=next_name(self.label))
+
+        if comp is not None:
             for c in comp:
                 if not isinstance(c, self.__class__):
                     raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
                 x_c, _ = c._get_axis_data(axis)
                 norm_c = c.intensity / np.max(np.abs(c.intensity))
-                plt.plot(x_c, norm_c, '--', label=c.label)
+                plt.plot(x_c, norm_c, '--', label=next_name(c.label))
 
         if show_best_fit and self.best_fit_curve is not None:
-                # normalize for consistency
-                norm_best = self.best_fit_curve / np.max(np.abs(self.best_fit_curve))
-                plt.plot(x, norm_best, '--', linewidth=2,
-                         label=f"Best Fit: {self.best_fit_label}")
+            norm_best = self.best_fit_curve / np.max(np.abs(self.best_fit_curve))
+            plt.plot(x, norm_best, '--', linewidth=2,
+                     label=next_name(f"Best Fit: {self.best_fit_label}"))
 
-        plt.xlabel(label)
-        plt.ylabel('Normalized Intensity')
+        plt.xlabel(xlabel if xlabel is not None else default_xlabel)
+        plt.ylabel(ylabel if ylabel is not None else 'Normalized Intensity')
+        plt.title(title if title is not None else ('Spectra Comparison' if comp else self.label))
         plt.legend()
-        plt.title('Spectra Comparison' if comp else self.label)
+        plt.tight_layout()
         plt.show()
 
-    def fit(self, comp, axis='energy'):
-
+    def fit(self, comp, axis='energy', mse_threshold=0.10, atomic_mass=None):
+        self.atomic_mass = atomic_mass
         if self.energy is None or self.wavelength is None:
             print("Spectrum in arbitrary units. Scale it first.")
             return
@@ -228,7 +370,6 @@ class Spectrum:
             if not isinstance(c, self.__class__):
                 raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
 
-        # Get axis values and normalize self
         x_self, label = self._get_axis_data(axis)
         y_self = self.intensity / np.max(np.abs(self.intensity))
 
@@ -237,11 +378,12 @@ class Spectrum:
         best_interp = None
         scores = []
 
+        all_curves = []
+
         for c in comp:
             x_c, _ = c._get_axis_data(axis)
             y_c = c.intensity / np.max(np.abs(c.intensity))
 
-            # Interpolate sim spectrum to experimental axis
             try:
                 interp = interp1d(x_c, y_c, bounds_error=False, fill_value=0)
                 y_c_interp = interp(x_self)
@@ -250,9 +392,9 @@ class Spectrum:
                 continue
 
             y_c_interp = y_c_interp / np.max(np.abs(y_c_interp))
-
             mse = np.mean((y_self - y_c_interp) ** 2)
             scores.append((mse, c.label))
+            all_curves.append((mse, c.label, y_c_interp))  # <-- store curve
 
             if mse < best_score:
                 best_score = mse
@@ -263,20 +405,51 @@ class Spectrum:
             print("No valid comparison spectra found.")
             return
 
-        # ---- Store best-fit info inside this object ----
+        # Threshold on MSE
+        in_range = [(mse, lbl) for mse, lbl in scores if mse <= best_score * (1 + mse_threshold)]
+
+        print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f})")
+        # Summarise confidence range
+        in_range_T = [float(re.search(r'T=([\d.eE+\-]+)', lbl).group(1)) for _, lbl in in_range if re.search(r'T=([\d.eE+\-]+)', lbl)]
+        in_range_R = [float(re.search(r'R=([\d.eE+\-]+)', lbl).group(1)) for _, lbl in in_range if re.search(r'R=([\d.eE+\-]+)', lbl)]
+
+        print(f"\n--- Summary ({mse_threshold*100:.0f}% MSE threshold, {len(in_range)} simulations) ---")
+        if in_range_T:
+            print(f"  Temperature range: {min(in_range_T):.4g} – {max(in_range_T):.4g} eV")
+        if in_range_R:
+            print(f"  Density range:     {min(in_range_R):.4g} – {max(in_range_R):.4g} g/cc")
+        if in_range_R and atomic_mass is not None:
+            ni_min = mass_density_to_ion_density(min(in_range_R), atomic_mass)
+            ni_max = mass_density_to_ion_density(max(in_range_R), atomic_mass)
+            print(f"  Ion density range: {ni_min:.3e} – {ni_max:.3e} cm^-3")
+
+
+        # Store results
         self.best_fit_label = best_match.label
         self.best_fit_score = best_score
-        self.best_fit_curve = best_interp  # y_c evaluated on x_self
+        self.best_fit_curve = best_interp
+        self.confidence_range = in_range
 
-        print(f"Best match: {best_match.label} (MSE = {best_score:.5f})")
+        # Plot MSE landscape
+        self._plot_mse_landscape(scores, best_score, mse_threshold)
 
-        # Plot comparison
+        in_range_set = {lbl for _, lbl in in_range}
+
+        plt.figure()
+
+        for mse, lbl, y_interp in all_curves:
+            if lbl in in_range_set and lbl != best_match.label:
+                plt.plot(x_self, y_interp, color='peachpuff', alpha=0.8, linewidth=0.8)
+
         plt.plot(x_self, y_self, label=f'Experiment: {self.label}')
         plt.plot(x_self, best_interp, '--', label=f'Best Sim: {best_match.label}')
+        plt.legend(handles=plt.gca().get_legend_handles_labels()[0] + [
+            Line2D([0], [0], color='#FFAD7A', linewidth=0.8,
+                   label=f'Within 10% MSE ({len(in_range)-1} fits)')
+        ])
         plt.xlabel(label)
         plt.ylabel("Normalized Intensity")
         plt.title("Best MSE Fit")
-        plt.legend()
         plt.show()
 
         return best_match
@@ -484,13 +657,7 @@ class Spectrum:
 
         print(f"Continuum subtracted from {self.label}. Fit: I = {A:.3g} exp(-{B:.3g} x)")
 
-    def save(self, folder_name="output"):
-        """
-        Saves the spectrum (energy, wavelength, intensity) to a CSV file
-        in a folder named `folder_name`, and includes the best-fit info
-        if available.
-        """
-
+    def save(self, folder_name="output", save_plot=True, plot_format='png', axis='energy', title=None, xlabel=None, ylabel=None, legend_names=None, atomic_mass=None):
         # --- Prepare output directory ---
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(base_dir, folder_name)
@@ -502,41 +669,143 @@ class Spectrum:
             "energy": self.energy,
             "intensity": self.intensity,
         }
-
-        # --- Add best-fit info when available ---
         if self.best_fit_label is not None and self.best_fit_curve is not None:
             data["best_fit_label"] = self.best_fit_label
             data["best_fit_score"] = self.best_fit_score
             data["best_fit_curve"] = self.best_fit_curve
 
         df = pd.DataFrame(data)
-
-        # --- Save as CSV ---
         out_path = os.path.join(out_dir, f"{self.label}.csv")
         df.to_csv(out_path, index=False)
-
         print(f"Saved spectrum to {out_path}")
 
+        # --- Save plot ---
+        if save_plot:
+            atomic_mass = atomic_mass or getattr(self, 'atomic_mass', None)
+            x, default_xlabel = self._get_axis_data(axis)
+            norm_self = self.intensity / np.max(np.abs(self.intensity))
+
+            # Build format dict
+            fmt = {}
+            if self.best_fit_label is not None:
+                t_match = re.search(r'T=([\d.eE+\-]+)', self.best_fit_label)
+                r_match = re.search(r'R=([\d.eE+\-]+)', self.best_fit_label)
+                if t_match:
+                    fmt['T'] = f'{float(t_match.group(1)):.4g}'
+                if r_match:
+                    R_val = float(r_match.group(1))
+                    fmt['rho'] = f'{R_val:.4g}'
+                    if atomic_mass is not None:
+                        fmt['ni'] = f'{mass_density_to_ion_density(R_val, atomic_mass):.1e}'
+
+            def apply_fmt(s):
+                try:
+                    return s.format(**fmt)
+                except KeyError:
+                    return s
+
+            all_labels = [self.label]
+            if self.best_fit_curve is not None:
+                all_labels += [f"Best Fit: {self.best_fit_label}"]
+
+            name_iter = iter([apply_fmt(n) for n in legend_names]) if legend_names is not None else iter(all_labels)
+
+            def next_name(fallback):
+                try:
+                    return next(name_iter)
+                except StopIteration:
+                    return fallback
+
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.plot(x, norm_self, color='black',linewidth=1.2,label=next_name(self.label))
+
+            if self.best_fit_curve is not None:
+                norm_best = self.best_fit_curve / np.max(np.abs(self.best_fit_curve))
+                ax.plot(x, norm_best, '--', color='#E8402A', linewidth=1.2,
+                        label=next_name(f"Best Fit: {self.best_fit_label}"))
+
+            ax.set_xlabel(xlabel if xlabel is not None else default_xlabel)
+            ax.set_ylabel(ylabel if ylabel is not None else 'Normalized Intensity')
+            ax.set_title(title if title is not None else self.label)
+            ax.legend()
+            plt.tight_layout()
+
+            plot_path = os.path.join(out_dir, f"{self.label}.{plot_format}")
+            fig.savefig(plot_path, format=plot_format, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+            print(f"Saved plot to {plot_path}")
+
+    def _plot_mse_landscape(self, scores, best_score, mse_threshold):
+        Tvals, Rvals, msevals = [], [], []
+
+        for mse, lbl in scores:
+            t_match = re.search(r'T=([\d.eE+\-]+)', lbl)
+            r_match = re.search(r'R=([\d.eE+\-]+)', lbl)
+            if t_match and r_match:
+                Tvals.append(float(t_match.group(1)))
+                Rvals.append(float(r_match.group(1)))
+                msevals.append(mse)
+
+        if len(Tvals) < 4:
+            print("Not enough labeled spectra to plot 2D landscape.")
+            return
+
+        Tvals = np.array(Tvals)
+        Rvals = np.array(Rvals)
+        msevals = np.array(msevals)
+
+        T_unique = np.sort(np.unique(Tvals))
+        R_unique = np.sort(np.unique(Rvals))
+
+        grid = np.full((len(R_unique), len(T_unique)), np.nan)
+        for t, r, mse in zip(Tvals, Rvals, msevals):
+            ti = np.where(T_unique == t)[0][0]
+            ri = np.where(R_unique == r)[0][0]
+            grid[ri, ti] = mse
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        T_grid, R_grid = np.meshgrid(T_unique, R_unique)
+        pcm = ax.pcolormesh(T_grid, R_grid, grid, cmap='viridis_r', shading='auto',
+                            norm=LogNorm(vmin=np.nanmin(grid), vmax=np.nanmax(grid)))
+        plt.colorbar(pcm, ax=ax, label='MSE')
+        ax.set_yscale('log')
+
+        # Contour at threshold
+        try:
+            cs = ax.contour(T_grid, R_grid, grid, levels=[best_score * (1 + mse_threshold)],
+                            colors='white', linestyles='--')
+            ax.clabel(cs, fmt=f'{mse_threshold*100:.0f}%% above best')
+        except Exception:
+            pass
+
+        # Mark best fit
+        best_idx = np.argmin(msevals)
+        ax.scatter(Tvals[best_idx], Rvals[best_idx], color='orange', zorder=5, s=80, label='Best fit')
+
+        ax.set_xlabel('Temperature [eV]')
+        ax.set_ylabel(r'Mass Density [g/cm$^3$]')
+        ax.set_title('MSE Landscape')
+        ax.legend()
+        plt.tight_layout()
+        plt.show()
 
 
-def upload_folder():
-    root = Tk()
-    root.withdraw()
-    root.update()
-    dir = filedialog.askdirectory(title="Select a folder")
-    root.destroy()
+def upload_folder(folder_path=None):
+        if folder_path is None:
+            root = Tk()
+            root.withdraw()
+            root.update()
+            folder_path = filedialog.askdirectory(title="Select a folder")
+            root.destroy()
 
-    objs = []
-
-    for spec in os.listdir(dir):
-        spec = os.path.join(dir,spec)
-        if spec.endswith('.ppd') or spec.endswith('.csv'):
-            objs.append(Spectrum(spec))
-        else:
-            continue
-
-
-    return objs
+        objs = []
+        for spec in os.listdir(folder_path):
+            spec = os.path.join(folder_path, spec)
+            if spec.endswith('.ppd') or spec.endswith('.csv'):
+                objs.append(Spectrum(spec))
+            else:
+                continue
+        return objs
 
 def load_reflectivity_calibration():
     """
@@ -660,3 +929,16 @@ def load_filter_transmission():
     print("Filter ready.")
 
     return energies, transmission, interp
+
+def mass_density_to_ion_density(rho_gcc, atomic_mass):
+    N_A = 6.02214076e23
+    return (rho_gcc * N_A) / atomic_mass
+
+
+if __name__ == "__main__":
+    exp = Spectrum('/Users/orenyang/Desktop/for_kim/output/7247.csv')
+    sims = upload_folder('/Users/orenyang/Documents/GitHub/xray_spectroscopy/prismspect/ne/ne_50-350eV_1e18-5e21_4mm/results')
+    exp.fit(sims, atomic_mass=20.18)
+    exp.plot(legend_names=['Measured Spectrum', 'Best Fit: T={T} eV, $n_i$={ni} cm$^{{-3}}$'])
+    exp.save(folder_name='test', plot_format='svg', atomic_mass=20.18,
+             legend_names=['Measured Spectrum', 'Best Fit: T={T} eV, $n_i$={ni} cm$^{{-3}}$'])

@@ -114,7 +114,7 @@ from scipy.optimize import curve_fit
 from matplotlib.colors import LogNorm
 import re
 from matplotlib.lines import Line2D
-
+import matplotlib.patches as mpatches
 
 class Spectrum:
     def __init__(self, spectrum=None, label=None):
@@ -128,10 +128,14 @@ class Spectrum:
             raise ValueError("No spectrum file provided or selected.")
 
         df = pd.read_csv(spectrum)
+        df.columns = df.columns.str.lower()
 
         if 'energy' in df.columns:
             self.energy = df['energy']
-            self.wavelength = df['wavelength']
+            if 'wavelength' in df.columns:
+                self.wavelength=df['wavelength']
+            else:
+                self.wavelength= 12398 / self.energy
             self.intensity = df['intensity']
         elif '#' in df.columns[0]:
             with open(spectrum, 'r') as f:
@@ -295,9 +299,13 @@ class Spectrum:
 
         return x, label
 
-    def plot(self, comp=None, axis='energy', show_best_fit=True, title=None, xlabel=None, ylabel=None, legend_names=None, atomic_mass=None):
+    def plot(self, comp=None, axis='energy', show_best_fit=True, title=None, xlabel=None,
+    ylabel=None, legend_names=None, atomic_mass=None, normalize=True):
         x, default_xlabel = self._get_axis_data(axis)
-        norm_self = self.intensity / np.max(np.abs(self.intensity))
+        if normalize:
+            norm_self = self.intensity / np.max(np.abs(self.intensity))
+        else:
+            norm_self = self.intensity
         atomic_mass = atomic_mass or getattr(self, 'atomic_mass', None)
 
         # Build format dict from best fit label
@@ -337,14 +345,25 @@ class Spectrum:
                 return fallback
 
         plt.plot(x, norm_self, label=next_name(self.label))
+        if getattr(self, 'std', None) is not None:
+            std_plot = self.std / np.max(np.abs(self.intensity)) if normalize else self.std
+            plt.fill_between(x, norm_self - std_plot, norm_self + std_plot, alpha=0.3, label='_nolegend_')
 
         if comp is not None:
             for c in comp:
                 if not isinstance(c, self.__class__):
                     raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
                 x_c, _ = c._get_axis_data(axis)
-                norm_c = c.intensity / np.max(np.abs(c.intensity))
-                plt.plot(x_c, norm_c, '--', label=next_name(c.label))
+                if normalize:
+                    norm_c = c.intensity / np.max(np.abs(c.intensity))
+                else:
+                    norm_c = c.intensity
+                has_std = getattr(c, 'std', None) is not None
+                linestyle = '-' if has_std else '--'
+                plt.plot(x_c, norm_c, linestyle, label=next_name(c.label))
+                if has_std:
+                    std_plot = c.std / np.max(np.abs(c.intensity)) if normalize else c.std
+                    plt.fill_between(x_c, norm_c - std_plot, norm_c + std_plot, alpha=0.3, label='_nolegend_')
 
         if show_best_fit and self.best_fit_curve is not None:
             norm_best = self.best_fit_curve / np.max(np.abs(self.best_fit_curve))
@@ -358,7 +377,7 @@ class Spectrum:
         plt.tight_layout()
         plt.show()
 
-    def fit(self, comp, axis='energy', mse_threshold=0.10, atomic_mass=None):
+    def fit(self, comp, axis='energy', mse_threshold=0.10, atomic_mass=None, ignore=None, fit_range=None):
         self.atomic_mass = atomic_mass
         if self.energy is None or self.wavelength is None:
             print("Spectrum in arbitrary units. Scale it first.")
@@ -373,6 +392,33 @@ class Spectrum:
         x_self, label = self._get_axis_data(axis)
         y_self = self.intensity / np.max(np.abs(self.intensity))
 
+        # Parse fit_range into (lo, hi, order) tuples
+        parsed_ranges = []
+        if fit_range is not None:
+            for entry in fit_range:
+                if len(entry) == 3:
+                    parsed_ranges.append(entry)
+                else:
+                    parsed_ranges.append((entry[0], entry[1], 1))
+
+        # Build mask
+        mask = np.ones(len(x_self), dtype=bool)
+        if parsed_ranges:
+            range_mask = np.zeros(len(x_self), dtype=bool)
+            for lo, hi, _ in parsed_ranges:
+                range_mask |= (x_self >= lo) & (x_self <= hi)
+            mask &= range_mask
+
+        if ignore is not None:
+            for lo, hi in ignore:
+                mask &= ~((x_self >= lo) & (x_self <= hi))
+
+        # Build true-energy axis for interpolation
+        x_fit = x_self.copy().astype(float)
+        for lo, hi, order in parsed_ranges:
+            region = (x_self >= lo) & (x_self <= hi)
+            x_fit[region] = x_self[region] * order
+
         best_score = np.inf
         best_match = None
         best_interp = None
@@ -386,13 +432,13 @@ class Spectrum:
 
             try:
                 interp = interp1d(x_c, y_c, bounds_error=False, fill_value=0)
-                y_c_interp = interp(x_self)
+                y_c_interp = interp(x_fit)
             except Exception as e:
                 print(f"Skipping {c.label} due to interpolation error: {e}")
                 continue
 
             y_c_interp = y_c_interp / np.max(np.abs(y_c_interp))
-            mse = np.mean((y_self - y_c_interp) ** 2)
+            mse = np.mean((y_self[mask] - y_c_interp[mask]) ** 2)
             scores.append((mse, c.label))
             all_curves.append((mse, c.label, y_c_interp))  # <-- store curve
 
@@ -408,20 +454,39 @@ class Spectrum:
         # Threshold on MSE
         in_range = [(mse, lbl) for mse, lbl in scores if mse <= best_score * (1 + mse_threshold)]
 
-        print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f})")
         # Summarise confidence range
+        T_best = float(re.search(r'T=([\d.eE+\-]+)', best_match.label).group(1))
+        R_best = float(re.search(r'R=([\d.eE+\-]+)', best_match.label).group(1))
         in_range_T = [float(re.search(r'T=([\d.eE+\-]+)', lbl).group(1)) for _, lbl in in_range if re.search(r'T=([\d.eE+\-]+)', lbl)]
         in_range_R = [float(re.search(r'R=([\d.eE+\-]+)', lbl).group(1)) for _, lbl in in_range if re.search(r'R=([\d.eE+\-]+)', lbl)]
+        sigma_fit_T = (max(in_range_T) - min(in_range_T)) / 2 if len(in_range_T) > 1 else 0
+        sigma_fit_R = (max(in_range_R) - min(in_range_R)) / 2 if len(in_range_R) > 1 else 0
+
+        self.T_best = T_best
+        self.R_best = R_best
+        self.sigma_fit_T = sigma_fit_T
+        self.sigma_fit_R = sigma_fit_R
+
+        if atomic_mass is not None:
+            ni_best = mass_density_to_ion_density(R_best, atomic_mass)
+            print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f}) | T = {T_best:.4g} eV, ni = {ni_best:.3e} cm^-3")
+        else:
+            print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f}) | T = {T_best:.4g} eV, R = {R_best:.4g} g/cc")
 
         print(f"\n--- Summary ({mse_threshold*100:.0f}% MSE threshold, {len(in_range)} simulations) ---")
         if in_range_T:
-            print(f"  Temperature range: {min(in_range_T):.4g} – {max(in_range_T):.4g} eV")
+            print(f"  Temperature range: {min(in_range_T):.4g} – {max(in_range_T):.4g} eV  (σ_fit = ±{sigma_fit_T:.4g} eV)")
         if in_range_R:
-            print(f"  Density range:     {min(in_range_R):.4g} – {max(in_range_R):.4g} g/cc")
+            print(f"  Density range:     {min(in_range_R):.4g} – {max(in_range_R):.4g} g/cc  (σ_fit = ±{sigma_fit_R:.4g} g/cc)")
         if in_range_R and atomic_mass is not None:
             ni_min = mass_density_to_ion_density(min(in_range_R), atomic_mass)
             ni_max = mass_density_to_ion_density(max(in_range_R), atomic_mass)
-            print(f"  Ion density range: {ni_min:.3e} – {ni_max:.3e} cm^-3")
+            ni_best = mass_density_to_ion_density(R_best, atomic_mass)
+            sigma_fit_ni = (ni_max - ni_min) / 2
+            self.ni_best = ni_best
+            self.sigma_fit_ni = sigma_fit_ni
+            print(f"  Ion density range: {ni_min:.3e} – {ni_max:.3e} cm^-3  (σ_fit = ±{sigma_fit_ni:.3e} cm^-3)")
+
 
 
         # Store results
@@ -443,10 +508,23 @@ class Spectrum:
 
         plt.plot(x_self, y_self, label=f'Experiment: {self.label}')
         plt.plot(x_self, best_interp, '--', label=f'Best Sim: {best_match.label}')
-        plt.legend(handles=plt.gca().get_legend_handles_labels()[0] + [
+        if ignore is not None:
+            for lo, hi in ignore:
+                plt.axvspan(lo, hi, alpha=0.15, color='red', label='_nolegend_')
+        if parsed_ranges:
+            for lo, hi, _ in parsed_ranges:
+                plt.axvspan(lo, hi, alpha=0.15, color='green', label='_nolegend_')
+
+        extra_handles = [
             Line2D([0], [0], color='#FFAD7A', linewidth=0.8,
                    label=f'Within 10% MSE ({len(in_range)-1} fits)')
-        ])
+        ]
+        if ignore is not None:
+            extra_handles.append(mpatches.Patch(color='red', alpha=0.15, label='Ignored region'))
+        if parsed_ranges:
+            extra_handles.append(mpatches.Patch(color='green', alpha=0.15, label='Fit region'))
+
+        plt.legend(handles=plt.gca().get_legend_handles_labels()[0] + extra_handles)
         plt.xlabel(label)
         plt.ylabel("Normalized Intensity")
         plt.title("Best MSE Fit")
@@ -454,18 +532,25 @@ class Spectrum:
 
         return best_match
 
-    def reflectivity_calibration(self, cal):
+    def reflectivity_calibration(self, cal, order_regions=None):
         if self.energy is None or self.wavelength is None:
             print("Spectrum in arbitrary units. Scale it first.")
             return
-
         if cal is None:
             print("No filter provided.")
             return
 
         interp = cal[2]
-        correction = interp(self.energy)
+        energy = np.array(self.energy)
+        effective_energy = energy.copy()
 
+        if order_regions is not None:
+            for lo, hi, order in order_regions:
+                mask = (energy >= lo) & (energy <= hi)
+                effective_energy[mask] = energy[mask] * order
+                print(f"  Order-{order} correction applied in {lo}–{hi} eV.")
+
+        correction = interp(effective_energy)
         correction[correction == 0] = np.nan
         self.intensity = self.intensity / correction
 
@@ -475,43 +560,46 @@ class Spectrum:
             'energy': self.energy,
             'intensity': self.intensity
         })
-
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(base_dir, 'calibrated_lineouts')
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, self.label + '.csv')
         data.to_csv(out_path, index=False)
-
         print(f"Reflectivity calibration applied to {self.label}.")
 
-    def filter_transmission(self, cal):
+    def filter_transmission(self, cal, order_regions=None):
         if self.energy is None or self.wavelength is None:
             print("Spectrum must be scaled to energy first.")
             return
-
         if cal is None:
             print("No filter provided.")
             return
 
         interp = cal[2]
-        T = interp(self.energy)
+        energy = np.array(self.energy)
+        effective_energy = energy.copy()
 
-        T[T <= 0] = 1e-12  # prevent div-by-zero
-        self.intensity /= T
+        if order_regions is not None:
+            for lo, hi, order in order_regions:
+                mask = (energy >= lo) & (energy <= hi)
+                effective_energy[mask] = energy[mask] * order
+                print(f"  Order-{order} filter correction applied in {lo}–{hi} eV.")
+
+        T = interp(effective_energy)
+        T[T <= 0] = 1e-12
+        self.intensity *= T
 
         # Save calibrated lineout
-        data = pd.DataFrame({
+        '''data = pd.DataFrame({
             'wavelength': self.wavelength,
             'energy': self.energy,
             'intensity': self.intensity
         })
-
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(base_dir, 'calibrated_lineouts')
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, self.label + '.csv')
-        data.to_csv(out_path, index=False)
-
+        data.to_csv(out_path, index=False)'''
         print(f"Filter transmission applied to {self.label}.")
 
     def subtract_continuum(self):
@@ -657,8 +745,9 @@ class Spectrum:
 
         print(f"Continuum subtracted from {self.label}. Fit: I = {A:.3g} exp(-{B:.3g} x)")
 
-    def save(self, folder_name="output", save_plot=True, plot_format='png', axis='energy', title=None, xlabel=None, ylabel=None, legend_names=None, atomic_mass=None):
-        # --- Prepare output directory ---
+    def save(self, folder_name="output", save_plot=True, plot_format='png', axis='energy', title=None, xlabel=None,
+    ylabel=None, legend_names=None, atomic_mass=None, figsize=(6,4), xlim=None, ylim=None, show_title=True,
+    show_legend=True, normalize=True):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(base_dir, folder_name)
         os.makedirs(out_dir, exist_ok=True)
@@ -681,9 +770,13 @@ class Spectrum:
 
         # --- Save plot ---
         if save_plot:
-            atomic_mass = atomic_mass or getattr(self, 'atomic_mass', None)
+            if atomic_mass is None:
+                atomic_mass = getattr(self, 'atomic_mass', None)
             x, default_xlabel = self._get_axis_data(axis)
-            norm_self = self.intensity / np.max(np.abs(self.intensity))
+            if normalize:
+                norm_self = self.intensity / np.max(np.abs(self.intensity))
+            else:
+                norm_self = self.intensity
 
             # Build format dict
             fmt = {}
@@ -716,18 +809,27 @@ class Spectrum:
                 except StopIteration:
                     return fallback
 
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig, ax = plt.subplots(figsize=figsize)
             ax.plot(x, norm_self, color='black',linewidth=1.2,label=next_name(self.label))
 
             if self.best_fit_curve is not None:
                 norm_best = self.best_fit_curve / np.max(np.abs(self.best_fit_curve))
                 ax.plot(x, norm_best, '--', color='#E8402A', linewidth=1.2,
                         label=next_name(f"Best Fit: {self.best_fit_label}"))
+            if getattr(self, 'std', None) is not None:
+                std_plot = self.std / np.max(np.abs(self.intensity)) if normalize else self.std
+                plt.fill_between(x, norm_self - std_plot, norm_self + std_plot, alpha=0.3, label='±1σ')
 
             ax.set_xlabel(xlabel if xlabel is not None else default_xlabel)
             ax.set_ylabel(ylabel if ylabel is not None else 'Normalized Intensity')
-            ax.set_title(title if title is not None else self.label)
-            ax.legend()
+            if xlim is not None:
+                ax.set_xlim(xlim)
+            if ylim is not None:
+                ax.set_ylim(ylim)
+            if show_title:
+                ax.set_title(title if title is not None else self.label)
+            if show_legend:
+                ax.legend()
             plt.tight_layout()
 
             plot_path = os.path.join(out_dir, f"{self.label}.{plot_format}")
@@ -789,6 +891,36 @@ class Spectrum:
         plt.tight_layout()
         plt.show()
 
+    def average(self, others, lo=None, hi=None, axis='energy'):
+        if not isinstance(others, list):
+            others = [others]
+        all_spectra = [self] + others
+        x_ref, _ = self._get_axis_data(axis)
+        lo = lo if lo is not None else x_ref.min()
+        hi = hi if hi is not None else x_ref.max()
+        mask = (x_ref >= lo) & (x_ref <= hi)
+        x_out = x_ref[mask]
+        interpolated = []
+        for s in all_spectra:
+            x_s, _ = s._get_axis_data(axis)
+            interp = interp1d(x_s, s.intensity, bounds_error=False, fill_value=0)
+            y_interp = interp(x_out)
+            interpolated.append(y_interp)
+        interpolated = np.array(interpolated)
+        avg_intensity = np.mean(interpolated, axis=0)
+        std_intensity = np.std(interpolated, axis=0)
+        result = self.__class__.__new__(self.__class__)
+        result.energy = x_out if axis == 'energy' else None
+        result.wavelength = 12398 / x_out if axis == 'energy' else x_out
+        result.intensity = avg_intensity
+        result.std = std_intensity
+        result.label = f"avg_{'_'.join([s.label for s in all_spectra])}"
+        result.best_fit_label = None
+        result.best_fit_curve = None
+        result.best_fit_score = None
+        result.atomic_mass = getattr(self, 'atomic_mass', None)
+        return result
+
 
 def upload_folder(folder_path=None):
         if folder_path is None:
@@ -807,7 +939,7 @@ def upload_folder(folder_path=None):
                 continue
         return objs
 
-def load_reflectivity_calibration():
+def load_crystal_reflectivity():
     """
     Opens a file dialog to load a calibration CSV, creates an interpolation
     function, plots the calibration curve, and returns (energies, reflectivity, interp).
@@ -815,7 +947,7 @@ def load_reflectivity_calibration():
     root = Tk()
     root.withdraw()
     root.update()
-    calfile = filedialog.askopenfilename(title="Select reflectivity calibration file")
+    calfile = filedialog.askopenfilename(title="Select crystal reflectivity file")
     root.destroy()
 
     if not calfile:
@@ -854,7 +986,7 @@ def load_reflectivity_calibration():
 
     plt.show(block=True)
 
-    print("Calibration file loaded. Interpolation ready.")
+    print("Reflectivity file loaded. Calibration ready.")
 
     return energies, reflectivity, interp
 

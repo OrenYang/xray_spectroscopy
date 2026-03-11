@@ -587,7 +587,7 @@ class Spectrum:
 
         T = interp(effective_energy)
         T[T <= 0] = 1e-12
-        self.intensity *= T
+        self.intensity /= T
 
         # Save calibrated lineout
         '''data = pd.DataFrame({
@@ -891,36 +891,6 @@ class Spectrum:
         plt.tight_layout()
         plt.show()
 
-    def average(self, others, lo=None, hi=None, axis='energy'):
-        if not isinstance(others, list):
-            others = [others]
-        all_spectra = [self] + others
-        x_ref, _ = self._get_axis_data(axis)
-        lo = lo if lo is not None else x_ref.min()
-        hi = hi if hi is not None else x_ref.max()
-        mask = (x_ref >= lo) & (x_ref <= hi)
-        x_out = x_ref[mask]
-        interpolated = []
-        for s in all_spectra:
-            x_s, _ = s._get_axis_data(axis)
-            interp = interp1d(x_s, s.intensity, bounds_error=False, fill_value=0)
-            y_interp = interp(x_out)
-            interpolated.append(y_interp)
-        interpolated = np.array(interpolated)
-        avg_intensity = np.mean(interpolated, axis=0)
-        std_intensity = np.std(interpolated, axis=0)
-        result = self.__class__.__new__(self.__class__)
-        result.energy = x_out if axis == 'energy' else None
-        result.wavelength = 12398 / x_out if axis == 'energy' else x_out
-        result.intensity = avg_intensity
-        result.std = std_intensity
-        result.label = f"avg_{'_'.join([s.label for s in all_spectra])}"
-        result.best_fit_label = None
-        result.best_fit_curve = None
-        result.best_fit_score = None
-        result.atomic_mass = getattr(self, 'atomic_mass', None)
-        return result
-
 
 def upload_folder(folder_path=None):
         if folder_path is None:
@@ -1065,6 +1035,60 @@ def load_filter_transmission():
 def mass_density_to_ion_density(rho_gcc, atomic_mass):
     N_A = 6.02214076e23
     return (rho_gcc * N_A) / atomic_mass
+
+def average_temp_dens(spectra, atomic_mass=20.18):
+    T_vals = np.array([s.T_best for s in spectra])
+    R_vals = np.array([s.R_best for s in spectra])
+    sigma_fit_T = np.mean([s.sigma_fit_T for s in spectra])
+    sigma_fit_R = np.mean([s.sigma_fit_R for s in spectra])
+
+    sigma_T_total = np.sqrt(np.std(T_vals)**2 + sigma_fit_T**2)
+    sigma_R_total = np.sqrt(np.std(R_vals)**2 + sigma_fit_R**2)
+
+    print(f"Temperature: {np.mean(T_vals):.4g} ± {sigma_T_total:.4g} eV")
+    print(f"Density:     {np.mean(R_vals):.4g} ± {sigma_R_total:.4g} g/cc")
+
+    if atomic_mass is not None:
+        ni_vals = np.array([mass_density_to_ion_density(R, atomic_mass) for R in R_vals])
+        sigma_fit_ni = np.mean([s.sigma_fit_ni for s in spectra])
+        sigma_ni_total = np.sqrt(np.std(ni_vals)**2 + sigma_fit_ni**2)
+        print(f"Ion density: {np.mean(ni_vals):.3e} ± {sigma_ni_total:.3e} cm^-3")
+
+    return {
+        'T_mean': np.mean(T_vals), 'T_err': sigma_T_total,
+        'R_mean': np.mean(R_vals), 'R_err': sigma_R_total,
+        'ni_mean': np.mean(ni_vals) if atomic_mass is not None else None,
+        'ni_err': sigma_ni_total if atomic_mass is not None else None,
+    }
+
+def average_spectra(spectra, lo=None, hi=None, axis='energy'):
+    if not isinstance(spectra, list):
+        spectra = [spectra]
+    x_ref, _ = spectra[0]._get_axis_data(axis)
+    lo = lo if lo is not None else x_ref.min()
+    hi = hi if hi is not None else x_ref.max()
+    mask = (x_ref >= lo) & (x_ref <= hi)
+    x_out = x_ref[mask]
+    interpolated = []
+    for s in spectra:
+        x_s, _ = s._get_axis_data(axis)
+        interp = interp1d(x_s, s.intensity, bounds_error=False, fill_value=0)
+        y_interp = interp(x_out)
+        interpolated.append(y_interp)
+    interpolated = np.array(interpolated)
+    avg_intensity = np.mean(interpolated, axis=0)
+    std_intensity = np.std(interpolated, axis=0)
+    result = Spectrum.__new__(Spectrum)
+    result.energy = x_out if axis == 'energy' else None
+    result.wavelength = 12398 / x_out if axis == 'energy' else x_out
+    result.intensity = avg_intensity
+    result.std = std_intensity
+    result.label = f"avg_{'_'.join([s.label for s in spectra])}"
+    result.best_fit_label = None
+    result.best_fit_curve = None
+    result.best_fit_score = None
+    result.atomic_mass = getattr(spectra[0], 'atomic_mass', None)
+    return result
 
 
 if __name__ == "__main__":

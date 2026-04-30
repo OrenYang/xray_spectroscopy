@@ -16,3 +16,6 @@
 *.txt
 
 *.DS_store
+
+__pycache__/
+cornell_data/

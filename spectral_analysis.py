@@ -115,6 +115,7 @@ from matplotlib.colors import LogNorm
 import re
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
+import copy
 
 class Spectrum:
     def __init__(self, spectrum=None, label=None):
@@ -392,7 +393,6 @@ class Spectrum:
         x_self, label = self._get_axis_data(axis)
         y_self = self.intensity / np.max(np.abs(self.intensity))
 
-        # Parse fit_range into (lo, hi, order) tuples
         parsed_ranges = []
         if fit_range is not None:
             for entry in fit_range:
@@ -401,7 +401,6 @@ class Spectrum:
                 else:
                     parsed_ranges.append((entry[0], entry[1], 1))
 
-        # Build mask
         mask = np.ones(len(x_self), dtype=bool)
         if parsed_ranges:
             range_mask = np.zeros(len(x_self), dtype=bool)
@@ -413,7 +412,6 @@ class Spectrum:
             for lo, hi in ignore:
                 mask &= ~((x_self >= lo) & (x_self <= hi))
 
-        # Build true-energy axis for interpolation
         x_fit = x_self.copy().astype(float)
         for lo, hi, order in parsed_ranges:
             region = (x_self >= lo) & (x_self <= hi)
@@ -423,7 +421,6 @@ class Spectrum:
         best_match = None
         best_interp = None
         scores = []
-
         all_curves = []
 
         for c in comp:
@@ -440,7 +437,7 @@ class Spectrum:
             y_c_interp = y_c_interp / np.max(np.abs(y_c_interp))
             mse = np.mean((y_self[mask] - y_c_interp[mask]) ** 2)
             scores.append((mse, c.label))
-            all_curves.append((mse, c.label, y_c_interp))  # <-- store curve
+            all_curves.append((mse, c.label, y_c_interp))
 
             if mse < best_score:
                 best_score = mse
@@ -451,57 +448,73 @@ class Spectrum:
             print("No valid comparison spectra found.")
             return
 
-        # Threshold on MSE
-        in_range = [(mse, lbl) for mse, lbl in scores if mse <= best_score * (1 + mse_threshold)]
+        # --- Island detection ---
+        islands = self._find_confidence_islands(scores, best_score, mse_threshold)
+        self.confidence_islands = islands
 
-        # Summarise confidence range
+        # Primary island = global minimum
+        primary = islands[0]
         T_best = float(re.search(r'T=([\d.eE+\-]+)', best_match.label).group(1))
         R_best = float(re.search(r'R=([\d.eE+\-]+)', best_match.label).group(1))
-        in_range_T = [float(re.search(r'T=([\d.eE+\-]+)', lbl).group(1)) for _, lbl in in_range if re.search(r'T=([\d.eE+\-]+)', lbl)]
-        in_range_R = [float(re.search(r'R=([\d.eE+\-]+)', lbl).group(1)) for _, lbl in in_range if re.search(r'R=([\d.eE+\-]+)', lbl)]
-        sigma_fit_T = (max(in_range_T) - min(in_range_T)) / 2 if len(in_range_T) > 1 else 0
-        sigma_fit_R = (max(in_range_R) - min(in_range_R)) / 2 if len(in_range_R) > 1 else 0
+
+        # Asymmetric errors from primary island bounds
+        T_lo, T_hi = primary['T_range']
+        R_lo, R_hi = primary['R_range']
+        sigma_T_lo = T_best - T_lo
+        sigma_T_hi = T_hi - T_best
+        sigma_R_lo = R_best - R_lo
+        sigma_R_hi = R_hi - R_best
 
         self.T_best = T_best
         self.R_best = R_best
-        self.sigma_fit_T = sigma_fit_T
-        self.sigma_fit_R = sigma_fit_R
+        # Keep symmetric versions for average_temp_dens compatibility
+        self.sigma_fit_T = (T_hi - T_lo) / 2
+        self.sigma_fit_R = (R_hi - R_lo) / 2
+        print(f'\n################################{self.label}########################')
 
+        print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f})")
         if atomic_mass is not None:
             ni_best = mass_density_to_ion_density(R_best, atomic_mass)
-            print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f}) | T = {T_best:.4g} eV, ni = {ni_best:.3e} cm^-3")
-        else:
-            print(f"\nBest match: {best_match.label} (MSE = {best_score:.5f}) | T = {T_best:.4g} eV, R = {R_best:.4g} g/cc")
-
-        print(f"\n--- Summary ({mse_threshold*100:.0f}% MSE threshold, {len(in_range)} simulations) ---")
-        if in_range_T:
-            print(f"  Temperature range: {min(in_range_T):.4g} – {max(in_range_T):.4g} eV  (σ_fit = ±{sigma_fit_T:.4g} eV)")
-        if in_range_R:
-            print(f"  Density range:     {min(in_range_R):.4g} – {max(in_range_R):.4g} g/cc  (σ_fit = ±{sigma_fit_R:.4g} g/cc)")
-        if in_range_R and atomic_mass is not None:
-            ni_min = mass_density_to_ion_density(min(in_range_R), atomic_mass)
-            ni_max = mass_density_to_ion_density(max(in_range_R), atomic_mass)
-            ni_best = mass_density_to_ion_density(R_best, atomic_mass)
-            sigma_fit_ni = (ni_max - ni_min) / 2
+            ni_lo = mass_density_to_ion_density(R_lo, atomic_mass)
+            ni_hi = mass_density_to_ion_density(R_hi, atomic_mass)
             self.ni_best = ni_best
-            self.sigma_fit_ni = sigma_fit_ni
-            print(f"  Ion density range: {ni_min:.3e} – {ni_max:.3e} cm^-3  (σ_fit = ±{sigma_fit_ni:.3e} cm^-3)")
+            self.sigma_fit_ni = (ni_hi - ni_lo) / 2
+            print(f"  T  = {T_best:.4g} +{sigma_T_hi:.4g}/-{sigma_T_lo:.4g} eV")
+            print(f"  ni = {ni_best:.3e} +{ni_hi - ni_best:.2e}/-{ni_best - ni_lo:.2e} cm^-3")
+        else:
+            print(f"  T  = {T_best:.4g} +{sigma_T_hi:.4g}/-{sigma_T_lo:.4g} eV")
+            print(f"  R  = {R_best:.4g} +{sigma_R_hi:.4g}/-{sigma_R_lo:.4g} g/cc")
 
-
+        print(f"\n--- {len(islands)} confidence island(s) found ({mse_threshold*100:.0f}% MSE threshold) ---")
+        for i, isl in enumerate(islands):
+            T_lo_i, T_hi_i = isl['T_range']
+            R_lo_i, R_hi_i = isl['R_range']
+            marker = " ← global minimum" if i == 0 else ""
+            print(f"\n  Island {i+1}{marker}  (MSE = {isl['mse_min']:.5f}, {len(isl['labels'])} sims)")
+            print(f"    T  = {isl['T_center']:.4g} eV   range [{T_lo_i:.4g}, {T_hi_i:.4g}]  "
+                  f"+{T_hi_i - isl['T_center']:.4g}/-{isl['T_center'] - T_lo_i:.4g}")
+            print(f"    R  = {isl['R_center']:.4g} g/cc  range [{R_lo_i:.4g}, {R_hi_i:.4g}]  "
+                  f"+{R_hi_i - isl['R_center']:.4g}/-{isl['R_center'] - R_lo_i:.4g}")
+            if atomic_mass is not None:
+                ni_lo_i = mass_density_to_ion_density(R_lo_i, atomic_mass)
+                ni_hi_i = mass_density_to_ion_density(R_hi_i, atomic_mass)
+                ni_c = mass_density_to_ion_density(isl['R_center'], atomic_mass)
+                print(f"    ni = {ni_c:.3e} cm^-3  range [{ni_lo_i:.3e}, {ni_hi_i:.3e}]  "
+                      f"+{ni_hi_i - ni_c:.2e}/-{ni_c - ni_lo_i:.2e}")
 
         # Store results
         self.best_fit_label = best_match.label
         self.best_fit_score = best_score
         self.best_fit_curve = best_interp
-        self.confidence_range = in_range
+        self.confidence_range = [(mse, lbl) for isl in islands for lbl in isl['labels']
+                                  for mse, l in scores if l == lbl]
 
-        # Plot MSE landscape
-        self._plot_mse_landscape(scores, best_score, mse_threshold)
+        # Plot
+        self._plot_mse_landscape(scores, best_score, mse_threshold, islands)
 
-        in_range_set = {lbl for _, lbl in in_range}
+        in_range_set = {lbl for isl in islands for lbl in isl['labels']}
 
         plt.figure()
-
         for mse, lbl, y_interp in all_curves:
             if lbl in in_range_set and lbl != best_match.label:
                 plt.plot(x_self, y_interp, color='peachpuff', alpha=0.8, linewidth=0.8)
@@ -517,7 +530,7 @@ class Spectrum:
 
         extra_handles = [
             Line2D([0], [0], color='#FFAD7A', linewidth=0.8,
-                   label=f'Within 10% MSE ({len(in_range)-1} fits)')
+                   label=f'Within {mse_threshold*100:.0f}% MSE ({len(in_range_set)-1} fits)')
         ]
         if ignore is not None:
             extra_handles.append(mpatches.Patch(color='red', alpha=0.15, label='Ignored region'))
@@ -530,7 +543,175 @@ class Spectrum:
         plt.title("Best MSE Fit")
         plt.show()
 
+        self._last_scores = scores
+
         return best_match
+
+    def _find_confidence_islands(self, scores, best_score, mse_threshold):
+        from scipy.ndimage import label as nd_label
+
+        Tvals, Rvals, msevals, lbls = [], [], [], []
+        for mse, lbl in scores:
+            t_match = re.search(r'T=([\d.eE+\-]+)', lbl)
+            r_match = re.search(r'R=([\d.eE+\-]+)', lbl)
+            if t_match and r_match:
+                Tvals.append(float(t_match.group(1)))
+                Rvals.append(float(r_match.group(1)))
+                msevals.append(mse)
+                lbls.append(lbl)
+
+        if len(Tvals) < 4:
+            # Fall back to single island with full range
+            in_range = [(mse, lbl) for mse, lbl in scores if mse <= best_score * (1 + mse_threshold)]
+            all_T = [float(re.search(r'T=([\d.eE+\-]+)', lbl).group(1))
+                     for _, lbl in in_range if re.search(r'T=([\d.eE+\-]+)', lbl)]
+            all_R = [float(re.search(r'R=([\d.eE+\-]+)', lbl).group(1))
+                     for _, lbl in in_range if re.search(r'R=([\d.eE+\-]+)', lbl)]
+            best_T = float(re.search(r'T=([\d.eE+\-]+)',
+                           min(scores, key=lambda x: x[0])[1]).group(1))
+            best_R = float(re.search(r'R=([\d.eE+\-]+)',
+                           min(scores, key=lambda x: x[0])[1]).group(1))
+            return [{'labels': [lbl for _, lbl in in_range],
+                     'T_range': (min(all_T), max(all_T)),
+                     'R_range': (min(all_R), max(all_R)),
+                     'T_center': best_T, 'R_center': best_R,
+                     'mse_min': best_score}]
+
+        Tvals = np.array(Tvals)
+        Rvals = np.array(Rvals)
+        msevals = np.array(msevals)
+
+        T_unique = np.sort(np.unique(Tvals))
+        R_unique = np.sort(np.unique(Rvals))
+
+        grid = np.full((len(R_unique), len(T_unique)), np.nan)
+        lbl_grid = np.empty((len(R_unique), len(T_unique)), dtype=object)
+        mse_grid = np.full((len(R_unique), len(T_unique)), np.nan)
+
+        for t, r, mse, lbl in zip(Tvals, Rvals, msevals, lbls):
+            ti = np.where(T_unique == t)[0][0]
+            ri = np.where(R_unique == r)[0][0]
+            grid[ri, ti] = mse
+            lbl_grid[ri, ti] = lbl
+            mse_grid[ri, ti] = mse
+
+        threshold = best_score * (1 + mse_threshold)
+        binary = (grid <= threshold) & (~np.isnan(grid))
+
+        # 8-connectivity
+        structure = np.ones((3, 3), dtype=int)
+        labeled_array, num_features = nd_label(binary, structure=structure)
+
+        islands = []
+        for island_id in range(1, num_features + 1):
+            island_mask = labeled_array == island_id
+            ri_list, ti_list = np.where(island_mask)
+
+            island_T = T_unique[ti_list]
+            island_R = R_unique[ri_list]
+            island_mse = mse_grid[island_mask]
+            island_lbls = [lbl_grid[ri, ti] for ri, ti in zip(ri_list, ti_list)
+                           if lbl_grid[ri, ti] is not None]
+
+            # Best fit point within this island (no weighting)
+            best_in_island_idx = np.argmin(island_mse)
+            T_best_island = island_T[best_in_island_idx]
+            R_best_island = island_R[best_in_island_idx]
+
+            islands.append({
+                'labels': island_lbls,
+                'T_range': (float(island_T.min()), float(island_T.max())),
+                'R_range': (float(island_R.min()), float(island_R.max())),
+                'T_center': float(T_best_island),
+                'R_center': float(R_best_island),
+                'mse_min': float(island_mse.min()),
+            })
+
+        islands.sort(key=lambda x: x['mse_min'])
+        return islands
+
+    def _plot_mse_landscape(self, scores, best_score, mse_threshold, islands=None):
+        Tvals, Rvals, msevals = [], [], []
+
+        for mse, lbl in scores:
+            t_match = re.search(r'T=([\d.eE+\-]+)', lbl)
+            r_match = re.search(r'R=([\d.eE+\-]+)', lbl)
+            if t_match and r_match:
+                Tvals.append(float(t_match.group(1)))
+                Rvals.append(float(r_match.group(1)))
+                msevals.append(mse)
+
+        if len(Tvals) < 4:
+            print("Not enough labeled spectra to plot 2D landscape.")
+            return
+
+        Tvals = np.array(Tvals)
+        Rvals = np.array(Rvals)
+        msevals = np.array(msevals)
+
+        T_unique = np.sort(np.unique(Tvals))
+        R_unique = np.sort(np.unique(Rvals))
+
+        grid = np.full((len(R_unique), len(T_unique)), np.nan)
+        for t, r, mse in zip(Tvals, Rvals, msevals):
+            ti = np.where(T_unique == t)[0][0]
+            ri = np.where(R_unique == r)[0][0]
+            grid[ri, ti] = mse
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        T_grid, R_grid = np.meshgrid(T_unique, R_unique)
+        pcm = ax.pcolormesh(T_grid, R_grid, grid, cmap='viridis_r', shading='auto',
+                            norm=LogNorm(vmin=np.nanmin(grid), vmax=np.nanmax(grid)))
+        plt.colorbar(pcm, ax=ax, label='MSE')
+        ax.set_yscale('log')
+
+        # Threshold contour
+        try:
+            cs = ax.contour(T_grid, R_grid, grid,
+                            levels=[best_score * (1 + mse_threshold)],
+                            colors='white', linestyles='--')
+            ax.clabel(cs, fmt=f'{mse_threshold*100:.0f}% above best')
+        except Exception:
+            pass
+
+        # Mark global best fit
+        best_idx = np.argmin(msevals)
+        ax.scatter(Tvals[best_idx], Rvals[best_idx], color='orange',
+                   zorder=5, s=80, label='Best fit', marker='*')
+
+        '''# Annotate each island with a box showing its range
+        if islands is not None:
+            colors = ['white', 'yellow', 'cyan', 'lime', 'magenta']
+            for i, isl in enumerate(islands):
+                c = colors[i % len(colors)]
+                T_lo, T_hi = isl['T_range']
+                R_lo, R_hi = isl['R_range']
+                # Draw bounding box
+                rect = mpatches.Rectangle(
+                    (T_lo, R_lo), T_hi - T_lo, R_hi - R_lo,
+                    linewidth=1.5, edgecolor=c, facecolor='none',
+                    linestyle='-', zorder=4
+                )
+
+
+
+
+
+
+                ax.add_patch(rect)
+                # Mark island best-fit center
+                ax.scatter(isl['T_center'], isl['R_center'],
+                           color=c, zorder=6, s=60, marker='x', linewidths=2)
+                ax.annotate(f"  Island {i+1}", xy=(T_lo, R_lo),
+                            color=c, fontsize=8, va='top',
+                            bbox=dict(boxstyle='round,pad=0.15', fc='black', alpha=0.4))'''
+
+        ax.set_xlabel('Temperature [eV]')
+        ax.set_ylabel(r'Mass Density [g/cm$^3$]')
+        ax.set_title('MSE Landscape')
+        ax.legend()
+        plt.tight_layout()
+        plt.show()
 
     def reflectivity_calibration(self, cal, order_regions=None):
         if self.energy is None or self.wavelength is None:
@@ -745,6 +926,97 @@ class Spectrum:
 
         print(f"Continuum subtracted from {self.label}. Fit: I = {A:.3g} exp(-{B:.3g} x)")
 
+    def apply_spectral_resolution(self, resolving_power):
+        """
+        Convolves the spectrum with a Gaussian of constant resolving power
+        R = E/deltaE
+
+        Works by resampling onto a uniform log-energy grid (where constant R
+        becomes a constant-width Gaussian), convolving, then resampling back.
+
+        Parameters
+        ----------
+        resolving_power : float
+            E/deltaE — the resolving power of your instrument
+        """
+        if self.energy is None:
+            print("Spectrum must be scaled to energy first.")
+            return
+
+        energy = np.asarray(self.energy, dtype=float)
+        intensity = np.asarray(self.intensity, dtype=float)
+
+        # --- Resample onto uniform log-energy grid ---
+        log_e = np.log(energy)
+        log_e_uniform = np.linspace(log_e.min(), log_e.max(), len(energy))
+        intensity_log = np.interp(log_e_uniform, log_e, intensity)
+
+        # --- Sigma in log-energy pixels ---
+        # FWHM in log space = 1/R, sigma = FWHM / 2.3548
+        d_log_e = log_e_uniform[1] - log_e_uniform[0]
+        sigma_log_pixels = (1.0 / resolving_power) / 2.3548 / d_log_e
+
+        # --- Convolve ---
+        from scipy.ndimage import gaussian_filter1d
+        smoothed_log = gaussian_filter1d(intensity_log, sigma=sigma_log_pixels)
+
+        # --- Resample back to original energy grid ---
+        self.intensity = np.interp(log_e, log_e_uniform, smoothed_log)
+
+    def fit_with_resolution(self, comp, resolving_powers, axis='energy', atomic_mass=None):
+
+        best_overall_mse = np.inf
+        best_R = None
+        mse_vs_R = []
+
+        for R in resolving_powers:
+            # Deep copy sims so we don't permanently modify them
+            comp_copy = [copy.deepcopy(c) for c in comp]
+            for c in comp_copy:
+                c.apply_spectral_resolution(R)
+
+            # Run fit silently — suppress plots
+            scores = []
+            x_self, _ = self._get_axis_data(axis)
+            y_self = self.intensity / np.max(np.abs(self.intensity))
+
+            for c in comp_copy:
+                x_c, _ = c._get_axis_data(axis)
+                y_c = c.intensity / np.max(np.abs(c.intensity))
+                interp = interp1d(x_c, y_c, bounds_error=False, fill_value=0)
+                y_interp = interp(x_self.astype(float))
+                y_interp = y_interp / np.max(np.abs(y_interp))
+                mse = np.mean((y_self - y_interp) ** 2)
+                scores.append(mse)
+
+            best_mse = np.min(scores)
+            mse_vs_R.append(best_mse)
+            print(f"R = {R:.0f}  ->  best MSE = {best_mse:.5f}")
+
+            if best_mse < best_overall_mse:
+                best_overall_mse = best_mse
+                best_R = R
+
+        print(f"\nBest resolving power: E/dE = {best_R} (MSE = {best_overall_mse:.5f})")
+
+        # Plot MSE vs R
+        plt.figure()
+        plt.plot(resolving_powers, mse_vs_R, 'o-')
+        plt.xlabel('Resolving Power E/ΔE')
+        plt.ylabel('Best MSE')
+        plt.title('MSE vs Spectral Resolution')
+        plt.tight_layout()
+        plt.show()
+
+        # Now run the full fit with the best R
+        comp_best = [copy.deepcopy(c) for c in comp]
+        for c in comp_best:
+            c.apply_spectral_resolution(best_R)
+        self.fit(comp_best, axis=axis, atomic_mass=atomic_mass)
+
+        return best_R
+
+
     def save(self, folder_name="output", save_plot=True, plot_format='png', axis='energy', title=None, xlabel=None,
     ylabel=None, legend_names=None, atomic_mass=None, figsize=(6,4), xlim=None, ylim=None, show_title=True,
     show_legend=True, normalize=True):
@@ -837,59 +1109,6 @@ class Spectrum:
             plt.close(fig)
             print(f"Saved plot to {plot_path}")
 
-    def _plot_mse_landscape(self, scores, best_score, mse_threshold):
-        Tvals, Rvals, msevals = [], [], []
-
-        for mse, lbl in scores:
-            t_match = re.search(r'T=([\d.eE+\-]+)', lbl)
-            r_match = re.search(r'R=([\d.eE+\-]+)', lbl)
-            if t_match and r_match:
-                Tvals.append(float(t_match.group(1)))
-                Rvals.append(float(r_match.group(1)))
-                msevals.append(mse)
-
-        if len(Tvals) < 4:
-            print("Not enough labeled spectra to plot 2D landscape.")
-            return
-
-        Tvals = np.array(Tvals)
-        Rvals = np.array(Rvals)
-        msevals = np.array(msevals)
-
-        T_unique = np.sort(np.unique(Tvals))
-        R_unique = np.sort(np.unique(Rvals))
-
-        grid = np.full((len(R_unique), len(T_unique)), np.nan)
-        for t, r, mse in zip(Tvals, Rvals, msevals):
-            ti = np.where(T_unique == t)[0][0]
-            ri = np.where(R_unique == r)[0][0]
-            grid[ri, ti] = mse
-
-        fig, ax = plt.subplots(figsize=(7, 5))
-        T_grid, R_grid = np.meshgrid(T_unique, R_unique)
-        pcm = ax.pcolormesh(T_grid, R_grid, grid, cmap='viridis_r', shading='auto',
-                            norm=LogNorm(vmin=np.nanmin(grid), vmax=np.nanmax(grid)))
-        plt.colorbar(pcm, ax=ax, label='MSE')
-        ax.set_yscale('log')
-
-        # Contour at threshold
-        try:
-            cs = ax.contour(T_grid, R_grid, grid, levels=[best_score * (1 + mse_threshold)],
-                            colors='white', linestyles='--')
-            ax.clabel(cs, fmt=f'{mse_threshold*100:.0f}%% above best')
-        except Exception:
-            pass
-
-        # Mark best fit
-        best_idx = np.argmin(msevals)
-        ax.scatter(Tvals[best_idx], Rvals[best_idx], color='orange', zorder=5, s=80, label='Best fit')
-
-        ax.set_xlabel('Temperature [eV]')
-        ax.set_ylabel(r'Mass Density [g/cm$^3$]')
-        ax.set_title('MSE Landscape')
-        ax.legend()
-        plt.tight_layout()
-        plt.show()
 
 
 def upload_folder(folder_path=None):

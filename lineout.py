@@ -7,16 +7,16 @@ from tifffile import imread
 
 
 def main():
-    dir = '/Users/orenyang/Library/CloudStorage/GoogleDrive-oryang@ucsd.edu/Shared drives/HEDP CER/other_experiments/2026_Cornell_gaspuff/data_analysis/fssr/cropped/Ar/gel'
-    plot_dir = '/Users/orenyang/Library/CloudStorage/GoogleDrive-oryang@ucsd.edu/Shared drives/HEDP CER/other_experiments/2026_Cornell_gaspuff/data_analysis/fssr/lineout_plots/Ar/line/gel'
-    lineout_dir = '/Users/orenyang/Library/CloudStorage/GoogleDrive-oryang@ucsd.edu/Shared drives/HEDP CER/other_experiments/2026_Cornell_gaspuff/data_analysis/fssr/lineouts/Ar/line/gel'
+    dir = '/Users/orenyang/Library/CloudStorage/GoogleDrive-oryang@ucsd.edu/Shared drives/HEDP CER/other_experiments/2026_Cornell_gaspuff/data_analysis/fssr/test/cropped/'
+    plot_dir = '/Users/orenyang/Library/CloudStorage/GoogleDrive-oryang@ucsd.edu/Shared drives/HEDP CER/other_experiments/2026_Cornell_gaspuff/data_analysis/fssr/test/lineout_plots/'
+    lineout_dir = '/Users/orenyang/Library/CloudStorage/GoogleDrive-oryang@ucsd.edu/Shared drives/HEDP CER/other_experiments/2026_Cornell_gaspuff/data_analysis/fssr/test/lineouts/'
     for filename in os.listdir(dir):
         f = os.path.join(dir, filename)
-        line_profiles(f, y_positions=[0.2, 0.4, 0.6, 0.8],
-              use_fractions=True, plot_dir=plot_dir, lineout_dir=lineout_dir)
-        '''lineout(f,
+        '''line_profiles(f, y_positions=[0.2, 0.4, 0.6, 0.8],
+              use_fractions=True, plot_dir=plot_dir, lineout_dir=lineout_dir)'''
+        lineout(f,
                 plot_dir,
-                lineout_dir)'''
+                lineout_dir)
 
 
 # Function to plot and save lineouts

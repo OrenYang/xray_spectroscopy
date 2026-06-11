@@ -19,3 +19,5 @@
 
 __pycache__/
 cornell_data/
+prismspect/
+filter_transmission/

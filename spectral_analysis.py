@@ -1,106 +1,3 @@
-"""
-================================================================================
-spectrum.py  –  X-ray Spectral Analysis Toolkit
-================================================================================
-
-OVERVIEW
---------
-This module provides the `Spectrum` class for loading, calibrating, and fitting
-experimental x-ray spectra against libraries of simulated spectra, as well as
-helper functions for loading calibration data.
-
-CLASSES
--------
-Spectrum
-    Core class representing a single spectrum (experimental or simulated).
-
-    Loading
-    -------
-    Spectrum()                  Opens a file dialog to select a spectrum file.
-    Spectrum("path/to/file")    Loads directly from a .csv or .ppd file.
-
-    Supported input formats:
-      - Calibrated CSV   : columns 'energy', 'wavelength', 'intensity'
-      - Raw simulation   : whitespace-delimited .ppd or similar, with a 15-line
-                           header containing 'Plasma temperature' and 'Mass density'
-      - Raw lineout      : headerless CSV with a single intensity column
-
-    Calibration & Processing
-    ------------------------
-    .rescale()                  Interactive wavelength/energy calibration via
-                                ginput peak clicking and spline fitting.
-    .reflectivity_calibration() Corrects for crystal reflectivity curve.
-    .filter_transmission()      Corrects for filter transmission.
-    .subtract_continuum()       Interactively fits and subtracts a bremsstrahlung
-                                continuum (exponential fit); also estimates electron
-                                temperature from the continuum slope.
-
-    Fitting
-    -------
-    .fit(comp, axis, noise_sigma)
-        Fits this spectrum against a list of simulated Spectrum objects by
-        minimizing MSE. Converts MSE to chi-squared and reports confidence
-        regions using the Delta chi2 method (2 free parameters: T and rho):
-
-            68% confidence region:  Delta chi2 < 2.30
-            95% confidence region:  Delta chi2 < 6.17
-
-        If noise_sigma is not provided, it is estimated from the best-fit
-        residuals. For the most rigorous error bars, supply noise_sigma
-        estimated from a signal-free region of your detector.
-
-        Also produces a 2D Delta chi2 heatmap with confidence contours if
-        simulation labels are formatted as 'T=<value>_R=<value>'.
-
-    Plotting & Saving
-    -----------------
-    .plot()                     Plots the spectrum; overlays best-fit curve if
-                                a fit has been run.
-    .save()                     Saves spectrum and best-fit info to CSV.
-
-FUNCTIONS
----------
-upload_folder()                 Loads all .ppd/.csv files from a selected folder
-                                as a list of Spectrum objects. Useful for loading
-                                a simulation library in one call.
-load_reflectivity_calibration() Loads a crystal reflectivity CSV and returns an
-                                interpolation function.
-load_filter_transmission()      Loads a filter transmission .txt file and returns
-                                an interpolation function.
-
-TYPICAL WORKFLOW
-----------------
-    # 1. Load and calibrate experimental spectrum
-    exp = Spectrum()
-    exp.rescale()
-    exp.reflectivity_calibration(load_reflectivity_calibration())
-    exp.subtract_continuum()
-
-    # 2. Load simulation library
-    sims = upload_folder()
-
-    # 3. Fit and get confidence regions
-    exp.fit(sims, axis='energy')
-
-    # 4. Save result
-    exp.save()
-
-DEPENDENCIES
-------------
-    numpy, matplotlib, pandas, scipy
-
-NOTES
------
-- All intensity arrays are normalized to their absolute maximum before fitting.
-- Simulation labels must follow the 'T=<val>_R=<val>' format (auto-set when
-  loading .ppd files) for the 2D confidence landscape plot to work.
-- The Delta chi2 thresholds assume Gaussian noise and that the grid is dense
-  enough to sample the chi2 surface well. If your grid is coarse, the true
-  minimum may lie between grid points; consider fitting a 2D paraboloid near
-  the minimum for sub-grid-spacing precision.
-================================================================================
-"""
-
 import numpy as np
 import matplotlib
 matplotlib.use("TkAgg")
@@ -140,20 +37,23 @@ class Spectrum:
             self.intensity = df['intensity']
         elif '#' in df.columns[0]:
             with open(spectrum, 'r') as f:
-                header_lines = [next(f) for _ in range(15)]
+                lines = f.readlines()
 
-            # Extract plasma temperature and mass density
+            skiprows = sum(1 for line in lines if line.startswith('#'))
+            header_lines = [line for line in lines if line.startswith('#')]
+
             temp_line = next((line for line in header_lines if 'Plasma temperature' in line), None)
             dens_line = next((line for line in header_lines if 'Mass density' in line), None)
             plasma_temp = temp_line.split('=')[-1].strip() if temp_line else 'UnknownT'
             mass_dens = dens_line.split('=')[-1].strip() if dens_line else 'UnknownD'
             label = f"T={plasma_temp}_R={mass_dens}"
 
-            #load data
-            df = pd.read_csv(spectrum, skiprows=15, sep='\s+', names=[0, 1, 2, 3])
-            self.energy = df[0]
+            # Let pandas infer however many columns exist, always grab by position
+            df = pd.read_csv(spectrum, skiprows=skiprows, sep=r'\s+', header=None)
+
+            self.energy    = df.iloc[:, 0]
+            self.intensity = df.iloc[:, 1]
             self.wavelength = 12398 / self.energy
-            self.intensity = df[1]
         else:
             df = pd.read_csv(spectrum, header=None, skiprows=1)
             self.energy = None
@@ -184,19 +84,16 @@ class Spectrum:
     def rescale(self):
         fig, ax = plt.subplots()
         ax.plot(self.x, self.intensity, label='Spectrum')
-
         ax.set_xlabel('Arbitrary Units')
         ax.set_ylabel('Intensity')
         ax.set_title('Click calibration points (press ENTER when done)')
         ax.legend()
         plt.tight_layout()
         plt.show(block=False)
-
         print("Click as many calibration points as you want, then press ENTER...")
         clicked = plt.ginput(n=-1, timeout=-1)
         time.sleep(0.5)
         plt.close()
-
         if len(clicked) < 2:
             print("At least 2 points required. Calibration aborted.")
             return
@@ -204,23 +101,17 @@ class Spectrum:
         # Extract nearest index for each clicked x, refine peak
         refined_xs = []
         refined_indices = []
-
         for cx, cy in clicked:
-            # nearest x
             nearest = min(self.x, key=lambda x: abs(x - cx))
             idx = np.where(self.x == nearest)[0][0]
-
-            # --- AUTOMATIC  ±10 index refinement ---
             best_idx = idx
             for j in range(-10, 11):
                 test = idx + j
                 if 0 <= test < len(self.intensity):
                     if self.intensity[test] > self.intensity[best_idx]:
                         best_idx = test
-
             refined_indices.append(best_idx)
             refined_xs.append(self.x[best_idx])
-
         print(f"Refined peaks at x = {refined_xs}")
 
         # Ask user for calibration type
@@ -230,6 +121,23 @@ class Spectrum:
                 break
             print("Invalid input.")
 
+        # Ask user for interpolation method
+        while True:
+            interp_mode = input("Calibration fit: 'pchip' or 'poly' (polynomial)? ").strip().lower()
+            if interp_mode in ['pchip', 'poly']:
+                break
+            print("Invalid input.")
+
+        if interp_mode == 'poly':
+            while True:
+                try:
+                    poly_deg = int(input(f"Polynomial degree (1=linear, 2=quadratic, etc.)? "))
+                    if poly_deg >= 1:
+                        break
+                    print("Degree must be at least 1.")
+                except ValueError:
+                    print("Invalid input.")
+
         # Input corresponding wavelength/energies
         cal_vals = []
         for px in refined_xs:
@@ -238,8 +146,7 @@ class Spectrum:
                 cal_vals.append(lam)
             else:
                 E = float(input(f"Enter energy for peak at x={px:.2f} (eV): "))
-                cal_vals.append(12398 / E)   # convert to λ
-
+                cal_vals.append(12398 / E)
         cal_vals = np.array(cal_vals)
         refined_xs = np.array(refined_xs)
         sort_idx = np.argsort(refined_xs)
@@ -247,10 +154,24 @@ class Spectrum:
         cal_vals = cal_vals[sort_idx]
 
         # Fit λ(x)
-        cal_func = PchipInterpolator(refined_xs, cal_vals)
+        if interp_mode == 'pchip':
+            cal_func = PchipInterpolator(refined_xs, cal_vals, extrapolate=False)
+            self.wavelength = cal_func(self.x)
+            # Linear extrapolation beyond the calibration range
+            nan_mask = np.isnan(self.wavelength)
+            if nan_mask.any():
+                linear_func = interp1d(refined_xs, cal_vals, kind='linear', fill_value='extrapolate')
+                self.wavelength[nan_mask] = linear_func(self.x[nan_mask])
+        else:
+            coeffs = np.polyfit(refined_xs, cal_vals, deg=poly_deg)
+            self.wavelength = np.polyval(coeffs, self.x)
+            print(f"Polynomial coefficients (deg={poly_deg}): {coeffs}")
 
-        # Apply calibration
-        self.wavelength = cal_func(self.x)
+        # Monotonicity check
+        if not np.all(np.diff(self.wavelength) > 0) and not np.all(np.diff(self.wavelength) < 0):
+            print("Warning: calibration is non-monotonic — energy axis may fold. "
+                  "Consider adding more calibration points or using a lower poly degree.")
+
         self.energy = 12398 / self.wavelength
         self.intensity = self.intensity / np.max(np.abs(self.intensity))
 
@@ -260,7 +181,6 @@ class Spectrum:
             'energy': self.energy,
             'intensity': self.intensity
         })
-
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(base_dir, 'scaled_lineouts')
         os.makedirs(out_dir, exist_ok=True)
@@ -272,11 +192,10 @@ class Spectrum:
         plt.plot(self.energy, self.intensity)
         plt.xlabel('Energy [eV]')
         plt.ylabel('Normalized Intensity')
-        plt.title(f'{self.label} (spline fit calibration)')
+        plt.title(f'{self.label} ({"spline" if interp_mode == "pchip" else f"poly deg={poly_deg}"} calibration)')
         plt.tight_layout()
         plt.show()
-
-        print(f"Rescaling complete with spline fit.")
+        print(f"Rescaling complete.")
 
     def _get_axis_data(self, axis):
         if not isinstance(axis, str):
@@ -378,7 +297,7 @@ class Spectrum:
         plt.tight_layout()
         plt.show()
 
-    def fit(self, comp, axis='energy', mse_threshold=0.10, atomic_mass=None, ignore=None, fit_range=None):
+    def fit(self, comp, axis='energy', mse_threshold=0.10, atomic_mass=None, ignore=None, fit_range=None, resolving_power=None):
         self.atomic_mass = atomic_mass
         if self.energy is None or self.wavelength is None:
             print("Spectrum in arbitrary units. Scale it first.")
@@ -389,6 +308,11 @@ class Spectrum:
         for c in comp:
             if not isinstance(c, self.__class__):
                 raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
+        if resolving_power is not None:
+            comp = [copy.deepcopy(c) for c in comp]
+            for c in comp:
+                c.apply_spectral_resolution(resolving_power)
+            print(f"Applied spectral resolution E/ΔE = {resolving_power} to comparison spectra.")
 
         x_self, label = self._get_axis_data(axis)
         y_self = self.intensity / np.max(np.abs(self.intensity))
@@ -963,30 +887,50 @@ class Spectrum:
         # --- Resample back to original energy grid ---
         self.intensity = np.interp(log_e, log_e_uniform, smoothed_log)
 
-    def fit_with_resolution(self, comp, resolving_powers, axis='energy', atomic_mass=None):
-
+    def fit_with_resolution(self, comp, resolving_powers, axis='energy', atomic_mass=None,fit_range=None, ignore=None):
         best_overall_mse = np.inf
         best_R = None
         mse_vs_R = []
 
         for R in resolving_powers:
-            # Deep copy sims so we don't permanently modify them
             comp_copy = [copy.deepcopy(c) for c in comp]
             for c in comp_copy:
                 c.apply_spectral_resolution(R)
 
-            # Run fit silently — suppress plots
             scores = []
             x_self, _ = self._get_axis_data(axis)
             y_self = self.intensity / np.max(np.abs(self.intensity))
+
+            parsed_ranges = []
+            if fit_range is not None:
+                for entry in fit_range:
+                    if len(entry) == 3:
+                        parsed_ranges.append(entry)
+                    else:
+                        parsed_ranges.append((entry[0], entry[1], 1))
+
+            mask = np.ones(len(x_self), dtype=bool)
+            if parsed_ranges:
+                range_mask = np.zeros(len(x_self), dtype=bool)
+                for lo, hi, _ in parsed_ranges:
+                    range_mask |= (x_self >= lo) & (x_self <= hi)
+                mask &= range_mask
+            if ignore is not None:
+                for lo, hi in ignore:
+                    mask &= ~((x_self >= lo) & (x_self <= hi))
+
+            x_fit = x_self.copy().astype(float)
+            for lo, hi, order in parsed_ranges:
+                region = (x_self >= lo) & (x_self <= hi)
+                x_fit[region] = x_self[region] * order
 
             for c in comp_copy:
                 x_c, _ = c._get_axis_data(axis)
                 y_c = c.intensity / np.max(np.abs(c.intensity))
                 interp = interp1d(x_c, y_c, bounds_error=False, fill_value=0)
-                y_interp = interp(x_self.astype(float))
+                y_interp = interp(x_fit)
                 y_interp = y_interp / np.max(np.abs(y_interp))
-                mse = np.mean((y_self - y_interp) ** 2)
+                mse = np.mean((y_self[mask] - y_interp[mask]) ** 2)
                 scores.append(mse)
 
             best_mse = np.min(scores)
@@ -999,7 +943,6 @@ class Spectrum:
 
         print(f"\nBest resolving power: E/dE = {best_R} (MSE = {best_overall_mse:.5f})")
 
-        # Plot MSE vs R
         plt.figure()
         plt.plot(resolving_powers, mse_vs_R, 'o-')
         plt.xlabel('Resolving Power E/ΔE')
@@ -1008,18 +951,15 @@ class Spectrum:
         plt.tight_layout()
         plt.show()
 
-        # Now run the full fit with the best R
         comp_best = [copy.deepcopy(c) for c in comp]
         for c in comp_best:
             c.apply_spectral_resolution(best_R)
-        self.fit(comp_best, axis=axis, atomic_mass=atomic_mass)
+        self.fit(comp_best, axis=axis, atomic_mass=atomic_mass,
+                 fit_range=fit_range, ignore=ignore)
 
         return best_R
 
-
-    def save(self, folder_name="output", save_plot=True, plot_format='png', axis='energy', title=None, xlabel=None,
-    ylabel=None, legend_names=None, atomic_mass=None, figsize=(6,4), xlim=None, ylim=None, show_title=True,
-    show_legend=True, normalize=True):
+    def save(self, folder_name="output", save_plot=True, plot_format='png', axis='energy', title=None, xlabel=None,ylabel=None, legend_names=None, atomic_mass=None, figsize=(6,4), xlim=None, ylim=None, show_title=True,show_legend=True, normalize=True):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(base_dir, folder_name)
         os.makedirs(out_dir, exist_ok=True)

@@ -308,11 +308,35 @@ class Spectrum:
         for c in comp:
             if not isinstance(c, self.__class__):
                 raise TypeError(f"Expected instance of {self.__class__.__name__}, got {type(c).__name__} instead.")
-        if resolving_power is not None:
+
+        # --- resolving_power is an array: scan it, then recurse with the best single value ---
+        if resolving_power is not None and isinstance(resolving_power, (list, tuple, np.ndarray)):
+            best_R, mse_vs_R = self._scan_resolving_power(comp, resolving_power, axis=axis,
+                                                            fit_range=fit_range, ignore=ignore)
+            print(f"\nBest resolving power: E/dE = {best_R} (MSE = {min(mse_vs_R):.5f})")
+            plt.figure()
+            plt.plot(resolving_power, mse_vs_R, 'o-')
+            plt.xlabel('Resolving Power E/ΔE')
+            plt.ylabel('Best MSE')
+            plt.title('MSE vs Spectral Resolution')
+            plt.tight_layout()
+            plt.show()
+            return self.fit(comp, axis=axis, mse_threshold=mse_threshold, atomic_mass=atomic_mass,
+                             ignore=ignore, fit_range=fit_range, resolving_power=best_R)
+
+        # --- Apply continuum addition and/or a single resolving power to comparison spectra ---
+        has_continuum = getattr(self, 'continuum_func', None) is not None
+        if resolving_power is not None or has_continuum:
             comp = [copy.deepcopy(c) for c in comp]
             for c in comp:
-                c.apply_spectral_resolution(resolving_power)
-            print(f"Applied spectral resolution E/ΔE = {resolving_power} to comparison spectra.")
+                if has_continuum:
+                    self._add_continuum_to(c)
+                if resolving_power is not None:
+                    c.apply_spectral_resolution(resolving_power)
+            if has_continuum:
+                print(f"Added stored continuum to {len(comp)} comparison spectra.")
+            if resolving_power is not None:
+                print(f"Applied spectral resolution E/ΔE = {resolving_power} to comparison spectra.")
 
         x_self, label = self._get_axis_data(axis)
         y_self = self.intensity / np.max(np.abs(self.intensity))
@@ -470,6 +494,56 @@ class Spectrum:
         self._last_scores = scores
 
         return best_match
+
+    def _scan_resolving_power(self, comp, resolving_powers, axis='energy', fit_range=None, ignore=None):
+        x_self, _ = self._get_axis_data(axis)
+        y_self = self.intensity / np.max(np.abs(self.intensity))
+
+        parsed_ranges = []
+        if fit_range is not None:
+            for entry in fit_range:
+                parsed_ranges.append(entry if len(entry) == 3 else (entry[0], entry[1], 1))
+
+        mask = np.ones(len(x_self), dtype=bool)
+        if parsed_ranges:
+            range_mask = np.zeros(len(x_self), dtype=bool)
+            for lo, hi, _ in parsed_ranges:
+                range_mask |= (x_self >= lo) & (x_self <= hi)
+            mask &= range_mask
+        if ignore is not None:
+            for lo, hi in ignore:
+                mask &= ~((x_self >= lo) & (x_self <= hi))
+
+        x_fit = x_self.copy().astype(float)
+        for lo, hi, order in parsed_ranges:
+            region = (x_self >= lo) & (x_self <= hi)
+            x_fit[region] = x_self[region] * order
+
+        has_continuum = getattr(self, 'continuum_func', None) is not None
+
+        mse_vs_R = []
+        for R in resolving_powers:
+            comp_copy = [copy.deepcopy(c) for c in comp]
+            for c in comp_copy:
+                if has_continuum:
+                    self._add_continuum_to(c)
+                c.apply_spectral_resolution(R)
+
+            best_mse = np.inf
+            for c in comp_copy:
+                x_c, _ = c._get_axis_data(axis)
+                y_c = c.intensity / np.max(np.abs(c.intensity))
+                interp = interp1d(x_c, y_c, bounds_error=False, fill_value=0)
+                y_interp = interp(x_fit)
+                y_interp = y_interp / np.max(np.abs(y_interp))
+                mse = np.mean((y_self[mask] - y_interp[mask]) ** 2)
+                best_mse = min(best_mse, mse)
+
+            mse_vs_R.append(best_mse)
+            print(f"R = {R:.0f}  ->  best MSE = {best_mse:.5f}")
+
+        best_idx = int(np.argmin(mse_vs_R))
+        return resolving_powers[best_idx], mse_vs_R
 
     def _find_confidence_islands(self, scores, best_score, mse_threshold):
         from scipy.ndimage import label as nd_label
@@ -849,6 +923,147 @@ class Spectrum:
 
 
         print(f"Continuum subtracted from {self.label}. Fit: I = {A:.3g} exp(-{B:.3g} x)")
+
+    def add_continuum(self):
+        """
+        Interactively select line-free regions and fit an exponential
+        continuum A*exp(-B*E), exactly like subtract_continuum() does.
+
+        The difference: this spectrum's own intensity is left untouched.
+        Instead the fitted continuum is stored (self.continuum_func /
+        self.continuum_params) so that fit() will ADD it onto each
+        comparison (simulation) spectrum — rescaled to that simulation's
+        own intensity scale — before normalizing and computing MSE, rather
+        than removing the continuum from the experimental data.
+
+        Call this on the experimental Spectrum before calling .fit(...).
+        """
+
+        if self.energy is None or self.wavelength is None:
+            print("Spectrum must be scaled to energy first.")
+            return
+
+        fig, ax = plt.subplots()
+        ax.plot(self.energy, self.intensity, label='Spectrum')
+
+        ax.set_xlabel('Energy [eV]')
+        ax.set_ylabel('Intensity')
+        ax.set_title('Select as many continuum ranges as you want (must click even number of points), press ENTER when done')
+        ax.legend()
+        plt.tight_layout()
+        plt.show(block=False)
+
+        print("Select as many continuum ranges as you want (must click even number of points), then press ENTER...")
+        clicked = plt.ginput(n=-1, timeout=-1)
+        time.sleep(0.5)
+        plt.close()
+
+        if len(clicked) == 0 or len(clicked) % 2 == 1:
+            print("Must select even number of points. Continuum fit aborted.")
+            return
+
+        xs = []
+        indices = []
+        for cx, cy in clicked:
+            nearest = min(self.energy, key=lambda x: abs(x - cx))
+            idx = np.where(self.energy == nearest)[0][0]
+            indices.append(idx)
+            xs.append(self.energy[idx])
+
+        print(f"Points at x = {xs}")
+
+        indices = sorted(indices)
+        mask = np.ones(len(self.energy), dtype=bool)
+        for i in range(0, len(indices), 2):
+            lo = indices[i]
+            hi = indices[i + 1]
+            mask[lo:hi + 1] = False
+
+        x_fit = np.asarray(self.energy[mask])
+        y_fit = np.asarray(self.intensity[mask])
+
+        if len(x_fit) < 3:
+            print("Not enough points left to fit continuum.")
+            return
+
+        def expo(x, A, B):
+            return A * np.exp(-B * x)
+
+        A0 = np.max(y_fit)
+        B0 = 1 / (x_fit[-1] - x_fit[0] + 1e-9)
+
+        try:
+            popt, pcov = curve_fit(expo, x_fit, y_fit, p0=[A0, B0])
+            A, B = popt
+
+            if pcov is not None and np.isfinite(pcov[1, 1]):
+                sigma_B = np.sqrt(pcov[1, 1])
+            else:
+                sigma_B = np.nan
+
+            Te_eV = 1.0 / B
+            sigma_Te = sigma_B / (B ** 2) if np.isfinite(sigma_B) else np.nan
+
+            print("Estimated continuum temperature (E in eV):")
+            print(f"  T_e = {Te_eV:.4g} ± {sigma_Te:.2g} eV")
+
+            fig2, ax2 = plt.subplots(figsize=(8, 4))
+            ax2.plot(self.energy, np.log(self.intensity), label="log(Intensity)", linewidth=1.2)
+            ax2.plot(self.energy, np.log(expo(self.energy, A, B)), linestyle="--",
+                      label=f"Log Fit: ln(I)=ln(A)-B E\nB={B:.3g}")
+            ax2.set_xlabel("Energy [eV]")
+            ax2.set_ylabel("log(Intensity)")
+            ax2.set_title(f"Continuum Fit for {self.label} (to be ADDED to sims)")
+            ax2.legend()
+            plt.tight_layout()
+            plt.show()
+
+        except Exception as e:
+            print("Curve fit failed:", e)
+            return
+
+        continuum = expo(np.asarray(self.energy), A, B)
+
+        # --- Plot — NOTE: self.intensity is NOT modified, just shown for reference ---
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(self.energy, self.intensity, label="Original Spectrum (unmodified)", linewidth=1.2)
+        ax.plot(self.energy, continuum, linestyle="--", label="Continuum: A exp(-B x)")
+        for i in range(0, len(indices), 2):
+            lo = indices[i]
+            hi = indices[i + 1]
+            ax.axvspan(self.energy[lo], self.energy[hi], color="red", alpha=0.2)
+        ax.set_xlabel("Energy [eV]")
+        ax.set_ylabel("Intensity")
+        ax.set_title(f"Continuum to add to sims for {self.label}")
+        ax.legend()
+        plt.tight_layout()
+        plt.show()
+
+        # --- Store continuum for later use in fit() — note we do NOT touch self.intensity ---
+        self.continuum_params = (A, B)
+        self.continuum_func = lambda E, A=A, B=B: A * np.exp(-B * np.asarray(E, dtype=float))
+        # Scale basis: the experimental intensity level this continuum was extracted from.
+        # Used to rescale the continuum onto each comparison spectrum's own native scale.
+        self.continuum_norm_basis = np.max(np.abs(self.intensity))
+
+        print(f"Continuum stored (NOT subtracted) for {self.label}. "
+              f"Fit: I_continuum = {A:.3g} exp(-{B:.3g} x). "
+              f"It will be added to comparison spectra inside fit().")
+
+    def _add_continuum_to(self, c):
+        """
+        Adds this spectrum's stored continuum (from add_continuum()) onto a
+        comparison spectrum c, in place. The continuum is rescaled from the
+        experimental intensity level it was extracted from to c's own native
+        intensity scale, so it contributes the same *relative* continuum
+        baseline to c that it represented in the experimental data.
+        """
+        if getattr(self, 'continuum_func', None) is None:
+            return
+        cont = self.continuum_func(np.asarray(c.energy, dtype=float))
+        c_max = np.max(np.abs(c.intensity))
+        scale = c_max / self.continuum_norm_basis
+        c.intensity = np.asarray(c.intensity) + cont * scale
 
     def apply_spectral_resolution(self, resolving_power):
         """
